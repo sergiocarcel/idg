@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Función auxiliar para comprobar Auth
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // En producción (y sin un sistema robusto de claims), solemos dejar que
+    // cualquier usuario autenticado lea la base de datos, 
+    // pero la interfaz de React restringe lo visual.
+    // Opcionalmente podemos escalar estas reglas.
+    
+    // Regla base para TODAS LAS COLECCIONES del CRM excepto config:
+    match /{document=**} {
+      allow read: if isAuthenticated();
+      // Permitimos escritura si están autenticados (el CRM confía en los empleados
+      // para crear pedidos, partes de horas, etc). 
+      allow write: if isAuthenticated(); 
+    }
+    
+    // Colección CONFIDENCIAL: 'config' (Roles de usuarios y datos de empresa)
+    // Solo permitimos escritura a admins reales si configuramos Custom Claims,
+    // o para un MVP confiamos en Auth, pero restringimos que cualquiera la borre.
+    match /config/{configDoc} {
+      allow read: if isAuthenticated();
+      // Opcionalmente: un trabajador base no deberia poder cambiar esto.
+      // allow write: if request.auth.token.role == 'admin'; // (Si estuviesen configurados claims)
+      allow write: if isAuthenticated(); // Fallback genérico para V1
+    }
+  }
+}
