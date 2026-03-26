@@ -74,8 +74,9 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '30px' }}>
           <thead>
             <tr style={{ background: '#f0f0f0', borderBottom: '2px solid #000' }}>
-              <th style={{ padding: '8px', textAlign: 'left' }}>Descripción</th>
-              <th style={{ padding: '8px', textAlign: 'center', width: '60px' }}>Uds.</th>
+              <th style={{ padding: '8px', textAlign: 'left' }}>Concepto / Descripción</th>
+              <th style={{ padding: '8px', textAlign: 'center', width: '50px' }}>Unidad</th>
+              <th style={{ padding: '8px', textAlign: 'center', width: '50px' }}>Cant.</th>
               <th style={{ padding: '8px', textAlign: 'right', width: '90px' }}>Precio Un.</th>
               <th style={{ padding: '8px', textAlign: 'right', width: '100px' }}>Importe</th>
             </tr>
@@ -88,10 +89,10 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
                 <React.Fragment key={cap.id || capIdx}>
                   {/* Fila del capítulo */}
                   <tr style={{ background: '#fafafa' }}>
-                    <td colSpan="3" style={{ padding: '12px 8px', fontWeight: 'bold', borderBottom: '1px solid #ddd' }}>
+                    <td colSpan="4" style={{ padding: '12px 8px', fontWeight: 'bold', borderBottom: '1px solid #ddd', color: '#1e3a8a' }}>
                       {capIdx + 1}. {cap.nombre.toUpperCase()}
                     </td>
-                    <td style={{ padding: '12px 8px', fontWeight: 'bold', textAlign: 'right', borderBottom: '1px solid #ddd' }}>
+                    <td style={{ padding: '12px 8px', fontWeight: 'bold', textAlign: 'right', borderBottom: '1px solid #ddd', color: '#1e3a8a' }}>
                       {formatCurrency(capTotal)}
                     </td>
                   </tr>
@@ -103,10 +104,11 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
                     
                     return (
                       <tr key={partIdx}>
-                        <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee' }}>{partida.descripcion}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #eee' }}>{partida.cantidad}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #eee' }}>{formatCurrency(precio)}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #eee' }}>{formatCurrency(importe)}</td>
+                        <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', fontSize: '11px' }}>{partida.descripcion}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #eee', fontSize: '11px', color: '#666' }}>{partida.unidad || 'ud'}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #eee', fontSize: '11px' }}>{partida.cantidad}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #eee', fontSize: '11px' }}>{formatCurrency(precio)}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #eee', fontSize: '11px' }}>{formatCurrency(importe)}</td>
                       </tr>
                     );
                   })}

@@ -22,7 +22,7 @@ function App() {
   const [appData, setAppData] = useState({
     clientes: [], obras: [], presupuestos: [], pedidos: [], materiales: [], 
     proveedores: [], trabajadores: [], registroHoras: [], documentosRRHH: [], 
-    facturas: [], config: { empresa: null, usuarios: [] }
+    facturas: [], catalogoPartidas: [], config: { empresa: null, usuarios: [] }
   });
 
   const [loading, setLoading] = useState(true);
@@ -48,7 +48,7 @@ function App() {
       await seedDatabaseIfNeeded();
       
       const unsubs = [];
-      const cols = ['clientes', 'obras', 'presupuestos', 'pedidos', 'materiales', 'proveedores', 'trabajadores', 'registroHoras', 'documentosRRHH', 'facturas'];
+      const cols = ['clientes', 'obras', 'presupuestos', 'pedidos', 'materiales', 'proveedores', 'trabajadores', 'registroHoras', 'documentosRRHH', 'facturas', 'catalogoPartidas'];
       
       cols.forEach(col => {
         const unsub = listenToCollection(col, (data) => {

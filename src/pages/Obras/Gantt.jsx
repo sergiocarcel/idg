@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Trash2, X, Maximize2 } from 'lucide-react';
+import { Calendar, Plus, Trash2, X, Maximize2, PenTool } from 'lucide-react';
+import GanttPrint from './GanttPrint.jsx';
 
 export default function Gantt({ obra, onClose }) {
   // Generamos algunas tareas iniciales mockeadas para la demo premium
@@ -13,6 +14,7 @@ export default function Gantt({ obra, onClose }) {
   ]);
 
   const [newTaskName, setNewTaskName] = useState('');
+  const [isPrintMode, setIsPrintMode] = useState(false);
   const totalDays = 30;
 
   const handleAddTask = () => {
@@ -74,8 +76,8 @@ export default function Gantt({ obra, onClose }) {
             <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
               Arrastra el progreso para actualizar.
             </div>
-            <button className="btn-secondary" style={{ padding: '8px 14px' }}>
-              <Maximize2 size={14} /> Pantalla completa
+            <button className="btn-secondary" style={{ padding: '8px 14px', color: '#8b5cf6', borderColor: '#c4b5fd' }} onClick={() => setIsPrintMode(true)}>
+              <PenTool size={14} /> Firmar y Exportar PDF
             </button>
           </div>
 
@@ -184,6 +186,14 @@ export default function Gantt({ obra, onClose }) {
           </div>
         </div>
       </div>
+
+      {isPrintMode && (
+        <GanttPrint 
+          obra={obra} 
+          tasks={tasks} 
+          onClose={() => setIsPrintMode(false)} 
+        />
+      )}
     </div>
   );
 }

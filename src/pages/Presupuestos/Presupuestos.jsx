@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, FileText, Download, Copy, Eye, Send, Lock } from 'lucide-react';
+import { Plus, Edit2, Trash2, FileText, Download, Copy, Eye, Send, Lock, BookOpen } from 'lucide-react';
 import { saveDoc } from '../../services/db';
 import PresupuestoEditor from './PresupuestoEditor.jsx';
 import PresupuestoPrint from './PresupuestoPrint.jsx';
+import CatalogoPartidas from './CatalogoPartidas.jsx';
 
 export default function Presupuestos({ data, setData }) {
   const [filter, setFilter] = useState('todos');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isCatalogoOpen, setIsCatalogoOpen] = useState(false);
   const [selectedPpto, setSelectedPpto] = useState(null);
   const [printPpto, setPrintPpto] = useState(null);
   const [printMode, setPrintMode] = useState('cliente');
@@ -18,6 +20,14 @@ export default function Presupuestos({ data, setData }) {
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount || 0);
+  };
+
+  const isExpired = (fechaStr, estado) => {
+    if (estado !== 'enviado') return false;
+    const pptoDate = new Date(fechaStr);
+    const today = new Date();
+    const diffDays = Math.ceil((today - pptoDate) / (1000 * 60 * 60 * 24));
+    return diffDays >= 7;
   };
 
   const getStatusStyle = (estado) => {
@@ -65,9 +75,14 @@ export default function Presupuestos({ data, setData }) {
           <h1 className="page-title">Presupuestos</h1>
           <p className="page-subtitle">Gestiona las valoraciones económicas de tus obras.</p>
         </div>
-        <button className="btn-primary" onClick={handleCreate}>
-          <Plus size={16} /> Nuevo Presupuesto
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button className="btn-secondary" onClick={() => setIsCatalogoOpen(true)}>
+            <BookOpen size={16} /> Catálogo Maestro
+          </button>
+          <button className="btn-primary" onClick={handleCreate}>
+            <Plus size={16} /> Nuevo Presupuesto
+          </button>
+        </div>
       </header>
 
       {/* Tarjetas resumen */}
@@ -145,9 +160,16 @@ export default function Presupuestos({ data, setData }) {
                   <td>{new Date(ppto.fecha).toLocaleDateString()}</td>
                   <td style={{ fontWeight: '600' }}>{formatCurrency(calculateTotal(ppto))}</td>
                   <td>
-                    <span style={{ background: status.bg, color: status.color, padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600 }}>
-                      {status.label}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ background: status.bg, color: status.color, padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600 }}>
+                        {status.label}
+                      </span>
+                      {isExpired(ppto.fecha, ppto.estado) && (
+                        <span title="Han pasado más de 7 días desde el envío" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '3px 6px', borderRadius: '6px', fontSize: '10px', fontWeight: 800, letterSpacing: '-0.3px', display: 'flex', alignItems: 'center' }}>
+                          ¡+7 DÍAS!
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
@@ -192,6 +214,10 @@ export default function Presupuestos({ data, setData }) {
           mode={printMode}
           onClose={() => setPrintPpto(null)}
         />
+      )}
+
+      {isCatalogoOpen && (
+        <CatalogoPartidas data={data} onClose={() => setIsCatalogoOpen(false)} />
       )}
     </div>
   );

@@ -461,6 +461,11 @@ body, html, #root {
     gap: 16px;
   }
   
+  /* Forzar apilamiento en grids de componentes React con estilos 'inline' */
+  .page-container > div[style*="display: grid"] {
+    grid-template-columns: 1fr !important;
+  }
+
   /* Arreglar el dashboard en horizontal */
   .dashboard-grid {
     grid-template-columns: 1fr;

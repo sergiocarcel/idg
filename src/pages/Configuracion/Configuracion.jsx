@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Users, Save, Upload, Plus, Edit2, Shield, UserX, CheckCircle, UploadCloud } from 'lucide-react';
+import { Settings, Users, Save, Upload, Plus, Edit2, Shield, UserX, CheckCircle, UploadCloud, Info } from 'lucide-react';
 import { saveDoc } from '../../services/db';
 
 export default function Configuracion({ data, setData }) {
@@ -24,10 +24,56 @@ export default function Configuracion({ data, setData }) {
   const [userForm, setUserForm] = useState({ id: '', nombre: '', email: '', password: '', rol: 'trabajador', activo: true });
 
   const handleEmpresaChange = (field) => (e) => setEmpresa({ ...empresa, [field]: e.target.value });
+
+  const handleLogoUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Calcular nuevas dimensiones manteniendo proporciones (Máximo 300px o 300px)
+        const MAX_WIDTH = 300;
+        const MAX_HEIGHT = 300;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        // Usar canvas para redimensionar y recomprimir
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convertir la imagen reducida a Base64 súper ligero (WebP o JPEG en su defecto)
+        const dataUrl = canvas.toDataURL('image/webp', 0.8);
+        setEmpresa({ ...empresa, logoId: dataUrl });
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
   
   const saveEmpresa = async () => {
-    await saveDoc('config', 'empresa', empresa);
-    alert('Datos de empresa guardados correctamente.');
+    try {
+      await saveDoc('config', 'empresa', empresa);
+      alert('Datos de empresa y logotipo guardados correctamente.');
+    } catch (e) {
+      alert('Hubo un error guardando tu configuración. Contáctame si persiste.');
+    }
   };
 
   const handleUserSave = async () => {
@@ -79,14 +125,44 @@ export default function Configuracion({ data, setData }) {
           
           {/* Logo uploader */}
           <div className="stat-card" style={{ padding: '24px', alignSelf: 'start', textAlign: 'center' }}>
-            <h3 style={{ fontSize: '14px', marginBottom: '16px', textAlign: 'left' }}>Logotipo Coporativo</h3>
-            <div style={{ width: '100%', height: '160px', background: '#f8fafc', border: '2px dashed var(--border)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ padding: '16px', background: '#fff', borderRadius: '50%', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
-                <UploadCloud size={32} className="text-blue-500" />
-              </div>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>PNG transparente recomendado</span>
+            <h3 style={{ fontSize: '14px', marginBottom: '16px', textAlign: 'left' }}>Logotipo Corporativo</h3>
+            <div style={{ width: '100%', height: '160px', background: '#f8fafc', border: '2px dashed var(--border)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', flexDirection: 'column', gap: '8px', overflow: 'hidden' }}>
+              {empresa.logoId ? (
+                <img src={empresa.logoId} alt="Logo" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', padding: '8px' }} />
+              ) : (
+                <>
+                  <div style={{ padding: '16px', background: '#fff', borderRadius: '50%', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                    <UploadCloud size={32} style={{ color: '#3b82f6' }} />
+                  </div>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>PNG transparente recomendado</span>
+                </>
+              )}
             </div>
-            <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>Seleccionar Imagen</button>
+            
+            <input 
+              type="file" 
+              id="logo-upload-input" 
+              accept="image/*" 
+              style={{ display: 'none' }} 
+              onChange={handleLogoUpload} 
+            />
+            
+            <button 
+              className="btn-secondary" 
+              style={{ width: '100%', justifyContent: 'center' }} 
+              onClick={() => document.getElementById('logo-upload-input').click()}
+            >
+              {empresa.logoId ? 'Cambiar Imagen' : 'Seleccionar Imagen'}
+            </button>
+            {empresa.logoId && (
+              <button 
+                className="btn-secondary danger" 
+                style={{ width: '100%', justifyContent: 'center', marginTop: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }} 
+                onClick={() => setEmpresa({ ...empresa, logoId: '' })}
+              >
+                Eliminar Logo
+              </button>
+            )}
           </div>
 
           <div className="stat-card" style={{ padding: '24px' }}>
@@ -131,8 +207,19 @@ export default function Configuracion({ data, setData }) {
       )}
 
       {activeTab === 'usuarios' && (
-        <div className="stat-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fafafa' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ padding: '16px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+            <Info size={20} style={{ color: '#2563eb', flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e3a8a', marginBottom: '4px' }}>Gestión de Privacidad (Cero Costes Servidor)</div>
+              <div style={{ fontSize: '12px', color: '#1e40af', lineHeight: '1.5' }}>
+                Por alta seguridad comercial, el CRM únicamente asigna <strong>Roles Visuales</strong> a correos ya existentes. Tanto la <b>Ceración de la Contraseña (Llave)</b> inicial como el <b>Borrado Destructivo Permanente</b> de la plantilla debe ejecutarse siempre desde la pestaña de <i>Authentication</i> en tu <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" style={{color: '#2563eb', fontWeight: 700, textDecoration: 'underline'}}>Consola Nativa de Google Firebase</a>.
+              </div>
+            </div>
+          </div>
+          
+          <div className="stat-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fafafa' }}>
             <h3 style={{ fontSize: '14px', margin: 0 }}>Cuentas de Acceso al CRM</h3>
             <button className="btn-primary" onClick={() => { setUserForm({id:'', nombre:'', email:'', password:'', rol:'trabajador', activo:true}); setIsUserModalOpen(true); }}>
               <Plus size={14} /> Nuevo Usuario
@@ -177,6 +264,7 @@ export default function Configuracion({ data, setData }) {
             </tbody>
           </table>
         </div>
+      </div>
       )}
 
       {isUserModalOpen && (
@@ -191,15 +279,9 @@ export default function Configuracion({ data, setData }) {
                 <input type="text" value={userForm.nombre} onChange={e => setUserForm({...userForm, nombre: e.target.value})} />
               </div>
               <div className="form-group full-width">
-                <label>Email (Usuario login)</label>
-                <input type="email" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} />
+                <label>Email Idéntico de Acceso (Usuario Login)</label>
+                <input type="email" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} placeholder="El email donde le generaste la cuenta real..." />
               </div>
-              {!userForm.id && (
-                <div className="form-group full-width">
-                  <label>Contraseña Temporal</label>
-                  <input type="password" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} />
-                </div>
-              )}
               <div className="form-group full-width">
                 <label>Rol de Usuario</label>
                 <select value={userForm.rol} onChange={e => setUserForm({...userForm, rol: e.target.value})}>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Plus, Trash2, ArrowUp, ArrowDown, Save, FileText } from 'lucide-react';
 
 export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
+  const [activeSearch, setActiveSearch] = useState({ capIdx: null, partIdx: null });
   const [formData, setFormData] = useState(ppto || {
     id: 'PRE-' + Math.random().toString(36).substr(2, 6).toUpperCase(),
     clienteId: '',
@@ -10,7 +11,7 @@ export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
     estado: 'borrador',
     notas: '',
     capitulos: [
-      { id: 'CAP-1', nombre: 'Capítulo 1', partidas: [{ descripcion: '', cantidad: 1, precioCoste: 0, precioVenta: 0 }] }
+      { id: 'CAP-1', nombre: 'Capítulo 1', partidas: [{ descripcion: '', unidad: 'ud', cantidad: 1, precioCoste: 0, precioVenta: 0 }] }
     ]
   });
 
@@ -31,13 +32,13 @@ export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
 
   const addPartida = (capIndex) => {
     const newCaps = [...formData.capitulos];
-    newCaps[capIndex].partidas.push({ descripcion: '', cantidad: 1, precioCoste: 0, precioVenta: 0 });
+    newCaps[capIndex].partidas.push({ descripcion: '', unidad: 'ud', cantidad: 1, precioCoste: 0, precioVenta: 0 });
     setFormData({ ...formData, capitulos: newCaps });
   };
 
   const updatePartida = (capIndex, partIndex, field, value) => {
     const newCaps = [...formData.capitulos];
-    const val = field === 'descripcion' ? value : parseFloat(value) || 0;
+    const val = (field === 'descripcion' || field === 'unidad') ? value : (parseFloat(value) || 0);
     newCaps[capIndex].partidas[partIndex][field] = val;
     setFormData({ ...formData, capitulos: newCaps });
   };
@@ -145,10 +146,11 @@ export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
                       <tr>
-                        <th style={{ textAlign: 'left', paddingBottom: '8px', color: 'var(--text-muted)' }}>Descripción</th>
-                        <th style={{ width: '80px', textAlign: 'center', paddingBottom: '8px', color: 'var(--text-muted)' }}>Uds</th>
-                        <th style={{ width: '100px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Coste Un.</th>
-                        <th style={{ width: '100px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Venta Un.</th>
+                        <th style={{ textAlign: 'left', paddingBottom: '8px', color: 'var(--text-muted)' }}>Concepto / Descripción</th>
+                        <th style={{ width: '60px', textAlign: 'center', paddingBottom: '8px', color: 'var(--text-muted)' }}>Unid</th>
+                        <th style={{ width: '70px', textAlign: 'center', paddingBottom: '8px', color: 'var(--text-muted)' }}>Cant</th>
+                        <th style={{ width: '90px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Coste Un.</th>
+                        <th style={{ width: '90px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Venta Un.</th>
                         <th style={{ width: '100px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Total</th>
                         <th style={{ width: '40px' }}></th>
                       </tr>
@@ -157,11 +159,42 @@ export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
                       {cap.partidas.map((partida, partIdx) => (
                         <tr key={partIdx} style={{ borderBottom: '1px solid var(--border)' }}>
                           <td style={{ padding: '6px 0' }}>
+                            <div style={{ position: 'relative' }}>
+                              <input 
+                                type="text" value={partida.descripcion || ''} 
+                                onChange={(e) => updatePartida(capIdx, partIdx, 'descripcion', e.target.value)}
+                                onFocus={() => setActiveSearch({ capIdx, partIdx })}
+                                onBlur={() => setTimeout(() => setActiveSearch({ capIdx: null, partIdx: null }), 200)}
+                                style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: '6px' }}
+                                placeholder="Escribe para buscar o añade libremente..."
+                              />
+                              
+                              {activeSearch.capIdx === capIdx && activeSearch.partIdx === partIdx && partida.descripcion?.length > 2 && (
+                                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', maxHeight: '180px', overflowY: 'auto', zIndex: 10, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
+                                  {data.catalogoPartidas?.filter(p => p.concepto.toLowerCase().includes(partida.descripcion.toLowerCase()) || p.codigo?.toLowerCase().includes(partida.descripcion.toLowerCase())).map(p => (
+                                    <div 
+                                      key={p.id} 
+                                      onClick={() => {
+                                          const newCaps = [...formData.capitulos];
+                                          newCaps[capIdx].partidas[partIdx] = { ...newCaps[capIdx].partidas[partIdx], descripcion: p.concepto, precioCoste: p.coste, precioVenta: p.precioVenta, unidad: p.unidad };
+                                          setFormData({ ...formData, capitulos: newCaps });
+                                          setActiveSearch({ capIdx: null, partIdx: null });
+                                      }}
+                                      style={{ padding: '10px 12px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', fontSize: '12px' }}
+                                    >
+                                      <div style={{ fontWeight: 600, color: '#0f172a' }}>{p.concepto}</div>
+                                      <div style={{ color: '#64748b', fontSize: '11px', marginTop: '2px' }}>Ref: {p.codigo || 'S/N'} &middot; Venta: {formatCurrency(p.precioVenta)} / {p.unidad}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ padding: '6px 8px' }}>
                             <input 
-                              type="text" value={partida.descripcion} 
-                              onChange={(e) => updatePartida(capIdx, partIdx, 'descripcion', e.target.value)}
-                              style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: '6px' }}
-                              placeholder="Ej: Suministro y colocación de..."
+                              type="text" value={partida.unidad || 'ud'} 
+                              onChange={(e) => updatePartida(capIdx, partIdx, 'unidad', e.target.value)}
+                              style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center', fontSize: '13px', color: '#475569' }}
                             />
                           </td>
                           <td style={{ padding: '6px 8px' }}>

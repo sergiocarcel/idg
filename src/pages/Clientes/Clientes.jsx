@@ -137,6 +137,67 @@ export default function Clientes({ data, setData }) {
                   {selectedClient.notas}
                 </div>
               )}
+
+              {/* Obras Vinculadas */}
+              <div style={{ marginTop: '24px' }}>
+                <h4 style={{ fontSize: '13px', color: 'var(--text-main)', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  Proyectos Vinculados
+                  <span style={{ background: '#eff6ff', color: '#3b82f6', padding: '2px 8px', borderRadius: '12px', fontSize: '10px' }}>
+                    {data?.obras?.filter(o => o.clienteId === selectedClient.id).length || 0}
+                  </span>
+                </h4>
+                {data?.obras?.filter(o => o.clienteId === selectedClient.id).length === 0 ? (
+                  <div style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Este cliente no tiene obras registradas.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {data.obras.filter(o => o.clienteId === selectedClient.id).map(o => (
+                      <div key={o.id} style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', background: '#fff' }}>
+                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{o.nombre}</div>
+                        <div style={{ color: '#64748b', marginTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>{new Date(o.fechaCreacion || Date.now()).toLocaleDateString()}</span>
+                          <span style={{ color: o.estado === 'activa' ? '#16a34a' : '#64748b', fontWeight: 500 }}>{o.estado?.toUpperCase() || 'ACTIVA'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Presupuestos Vinculados */}
+              <div style={{ marginTop: '24px' }}>
+                <h4 style={{ fontSize: '13px', color: 'var(--text-main)', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  Historial de Presupuestos
+                  <span style={{ background: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: '12px', fontSize: '10px' }}>
+                    {data?.presupuestos?.filter(p => p.clienteId === selectedClient.id).length || 0}
+                  </span>
+                </h4>
+                {data?.presupuestos?.filter(p => p.clienteId === selectedClient.id).length === 0 ? (
+                  <div style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>No existen presupuestos asociados.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+                    {data.presupuestos.filter(p => p.clienteId === selectedClient.id).map(p => {
+                      const total = p.capitulos?.reduce((sum, cap) => sum + cap.partidas.reduce((s, pt) => s + (pt.cantidad * pt.precioVenta), 0), 0) || 0;
+                      return (
+                        <div key={p.id} style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#0f172a' }}>{p.id}</div>
+                            <div style={{ color: '#64748b', marginTop: '2px' }}>{new Date(p.fecha).toLocaleDateString()}</div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontWeight: 700, color: '#1e293b' }}>
+                              {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(total)}
+                            </div>
+                            <div style={{ fontSize: '10px', marginTop: '2px', color: p.estado === 'aceptado' ? '#16a34a' : (p.estado === 'rechazado' ? '#ef4444' : '#d97706'), fontWeight: 600 }}>
+                              {p.estado.toUpperCase()}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
             </div>
           </div>
         )}

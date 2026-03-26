@@ -4,12 +4,12 @@ import "firebase/compat/auth";
 import "firebase/compat/storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCdkEYlyjCgzcgQn6yFVHPI_igy0e0kJ0M",
-  authDomain: "idg-crm.firebaseapp.com",
-  projectId: "idg-crm",
-  storageBucket: "idg-crm.firebasestorage.app",
-  messagingSenderId: "831560014827",
-  appId: "1:831560014827:web:7d4b0d2c6e5a51c6b6d7ae"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 // Inicializamos la app en compat mode para facilitar la migración del HTML viejo al principio
@@ -26,4 +26,4 @@ if (import.meta.env.DEV) {
   console.log("🔥 Firebase Emulators Connected");
 }
 
-export { app, db, auth, storage };
+export { firebase, app, db, auth, storage };
