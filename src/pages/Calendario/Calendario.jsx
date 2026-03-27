@@ -184,7 +184,7 @@ export default function Calendario({ data, setData }) {
               const dayEvents = eventos.filter(e => e.date === fullDateStr);
 
               return (
-                <div key={d} style={{ minHeight: '100px', background: '#fff', border: isToday ? '2px solid var(--accent)' : '1px solid var(--border)', borderRadius: '8px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div key={d} onClick={() => { setNewEvent({...newEvent, date: fullDateStr}); setShowEventModal(true); }} style={{ minHeight: '100px', background: '#fff', border: isToday ? '2px solid var(--accent)' : '1px solid var(--border)', borderRadius: '8px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '4px', cursor: 'pointer', transition: 'box-shadow 0.2s' }}>
                   <div style={{ fontSize: '14px', fontWeight: isToday ? 800 : 500, color: isToday ? 'var(--accent)' : 'var(--text-main)', marginBottom: '4px' }}>
                     {d}
                   </div>

@@ -3,6 +3,7 @@ import { Plus, Edit2, Trash2, X, FolderOpen, Calendar, MapPin, User } from 'luci
 import { saveDoc, deleteDoc } from '../../services/db';
 import Gantt from './Gantt.jsx';
 import CarpetaObra from './CarpetaObra.jsx';
+import ActasModificacion from './ActasModificacion.jsx';
 
 export default function Obras({ data, setData }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -10,6 +11,7 @@ export default function Obras({ data, setData }) {
   const [editId, setEditId] = useState(null);
   const [ganttModalObra, setGanttModalObra] = useState(null);
   const [carpetaObra, setCarpetaObra] = useState(null);
+  const [actasObra, setActasObra] = useState(null);
 
   const initialForm = {
     nombre: '', clienteId: '', direccion: '', inicio: '', fin: '',
@@ -194,12 +196,15 @@ export default function Obras({ data, setData }) {
                   </div>
                 )}
 
-                <div style={{ marginTop: '24px', display: 'flex', gap: '8px' }}>
+                <div style={{ marginTop: '24px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <button className="btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setGanttModalObra(selectedObra)}>
-                    <Calendar size={14} /> Diagrama Gantt
+                    <Calendar size={14} /> Gantt
                   </button>
                   <button className="btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setCarpetaObra(selectedObra)}>
-                    <FolderOpen size={14} /> Documentos
+                    <FolderOpen size={14} /> Docs
+                  </button>
+                  <button className="btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setActasObra(selectedObra)}>
+                    <Edit2 size={14} /> Actas
                   </button>
                 </div>
               </div>
@@ -289,6 +294,10 @@ export default function Obras({ data, setData }) {
       {/* Modal Carpeta Obra (Firebase Storage) */}
       {carpetaObra && (
         <CarpetaObra obra={carpetaObra} data={data} setData={setData} onClose={() => setCarpetaObra(null)} />
+      )}
+
+      {actasObra && (
+        <ActasModificacion obra={actasObra} onClose={() => setActasObra(null)} />
       )}
     </div>
   );

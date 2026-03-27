@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, FileText, Download, Copy, Eye, Send, Lock, BookOpen } from 'lucide-react';
-import { saveDoc } from '../../services/db';
+import { Plus, Edit2, Trash2, FileText, Download, Copy, Eye, Send, Lock, BookOpen, RotateCcw, Mail, Link2 } from 'lucide-react';
+import { saveDoc, deleteDoc } from '../../services/db';
 import PresupuestoEditor from './PresupuestoEditor.jsx';
 import PresupuestoPrint from './PresupuestoPrint.jsx';
 import CatalogoPartidas from './CatalogoPartidas.jsx';
@@ -63,7 +63,9 @@ export default function Presupuestos({ data, setData }) {
     }, 0);
   };
 
-  const filteredPptos = filter === 'todos' ? presupuestos : presupuestos.filter(p => p.estado === filter);
+  const filteredPptos = filter === 'todos' 
+    ? presupuestos.filter(p => p.estado !== 'eliminado') 
+    : presupuestos.filter(p => p.estado === filter);
 
   const totalAceptado = presupuestos.filter(p => p.estado === 'aceptado').reduce((sum, p) => sum + calculateTotal(p), 0);
   const totalEnviado = presupuestos.filter(p => p.estado === 'enviado').reduce((sum, p) => sum + calculateTotal(p), 0);
@@ -110,7 +112,8 @@ export default function Presupuestos({ data, setData }) {
             { id: 'borrador', label: 'Borradores' },
             { id: 'enviado', label: 'Enviados' },
             { id: 'aceptado', label: 'Aceptados' },
-            { id: 'rechazado', label: 'Rechazados' }
+            { id: 'rechazado', label: 'Rechazados' },
+            { id: 'eliminado', label: '🗑️ Papelera' }
           ].map(f => (
             <button 
               key={f.id}
@@ -189,6 +192,28 @@ export default function Presupuestos({ data, setData }) {
                       
                       <button className="icon-btn" onClick={() => { setPrintMode('cliente'); setPrintPpto(ppto); }} title="Generar PDF (Cliente)"><Download size={14} /></button>
                       <button className="icon-btn" onClick={() => { setPrintMode('interno'); setPrintPpto(ppto); }} title="Generar PDF (Interno)" style={{ color: '#8b5cf6' }}><Lock size={14} /></button>
+                      
+                      {ppto.estado === 'enviado' && (
+                        <button className="icon-btn" onClick={async () => { await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'aceptado' }); }} title="Marcar como Aceptado" style={{ color: '#16a34a' }}><Link2 size={14} /></button>
+                      )}
+
+                      {ppto.estado !== 'borrador' && (
+                        <a 
+                          href={`mailto:${clientes.find(c => c.id === ppto.clienteId)?.email || ''}?subject=${encodeURIComponent('Presupuesto ' + ppto.id + ' - IDG')}&body=${encodeURIComponent('Estimado/a ' + getClientName(ppto.clienteId) + ',\n\nAdjuntamos el presupuesto referencia ' + ppto.id + ' por un importe de ' + formatCurrency(calculateTotal(ppto)) + ' (+ IVA).\n\nQuedamos a su disposición.\nSaludos,\nIDG')}`}
+                          className="icon-btn" title="Enviar por Email" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}
+                        >
+                          <Mail size={14} />
+                        </a>
+                      )}
+
+                      {ppto.estado !== 'eliminado' ? (
+                        <button className="icon-btn danger" onClick={async () => { if(window.confirm('¿Mover a papelera?')) await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'eliminado' }); }} title="Mover a papelera"><Trash2 size={14} /></button>
+                      ) : (
+                        <>
+                          <button className="icon-btn" onClick={async () => { await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'borrador' }); }} title="Restaurar de Papelera" style={{ color: '#16a34a' }}><RotateCcw size={14} /></button>
+                          <button className="icon-btn danger" onClick={async () => { if(window.confirm('¿Eliminar PERMANENTEMENTE?')) await deleteDoc('presupuestos', ppto.id); }} title="Eliminar definitivo"><Trash2 size={14} /></button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

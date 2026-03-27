@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, FileBarChart, Save } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, FileBarChart, Save, Plus, Trash2 } from 'lucide-react';
 import { updateDoc } from '../../services/db';
 
 export default function Facturas({ data, setData }) {
@@ -8,12 +8,16 @@ export default function Facturas({ data, setData }) {
   const obras = data?.obras || [];
   const presupuestos = data?.presupuestos || [];
 
-  // Si la obra seleccionada no tiene `gastosReales`, la inicializamos
   const updateGastos = async (obraId, field, value) => {
     const obra = obras.find(o => o.id === obraId);
     if (!obra) return;
-    const actuales = obra.gastosReales || { personal: 0, materiales: 0, subcontratas: 0, otros: 0 };
-    await updateDoc('obras', obraId, { gastosReales: { ...actuales, [field]: Number(value) || 0 } });
+    const actuales = obra.gastosReales || { personal: [], materiales: [], subcontratas: [], otros: [] };
+    await updateDoc('obras', obraId, { gastosReales: { ...actuales, [field]: value } });
+  };
+
+  const sumLineas = (lineas) => {
+    if (Array.isArray(lineas)) return lineas.reduce((s, l) => s + (Number(l.importe) || 0), 0);
+    return Number(lineas) || 0;
   };
 
   const getPresupuestoAceptado = (obraId) => {
@@ -28,11 +32,10 @@ export default function Facturas({ data, setData }) {
 
   const calculateRentabilidad = (obra) => {
     const presupuestado = getPresupuestoAceptado(obra.id);
-    const g = obra.gastosReales || { personal: 0, materiales: 0, subcontratas: 0, otros: 0 };
-    const gastosTotal = g.personal + g.materiales + g.subcontratas + g.otros;
+    const g = obra.gastosReales || { personal: [], materiales: [], subcontratas: [], otros: [] };
+    const gastosTotal = sumLineas(g.personal) + sumLineas(g.materiales) + sumLineas(g.subcontratas) + sumLineas(g.otros);
     const margen = presupuestado - gastosTotal;
     const porcentaje = presupuestado > 0 ? (margen / presupuestado) * 100 : 0;
-    
     return { presupuestado, gastosTotal, margen, porcentaje, g };
   };
 
@@ -155,61 +158,44 @@ export default function Facturas({ data, setData }) {
               
               return (
                 <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 4px', color: 'var(--text-main)' }}>Imputar Gastos</h3>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '24px' }}>{obra.nombre}</p>
+                  <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 4px', color: 'var(--text-main)' }}>Imputar Gastos (Detallado)</h3>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '20px' }}>{obra.nombre}</p>
 
-                  <div className="form-group full-width" style={{ marginBottom: '16px' }}>
-                    <label>Personal (Nóminas Propias)</label>
-                    <div style={{ position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>€</span>
-                      <input 
-                        type="number" 
-                        value={r.g.personal || ''} 
-                        onChange={(e) => updateGastos(obra.id, 'personal', e.target.value)}
-                        style={{ paddingLeft: '28px', textAlign: 'right' }}
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                  <div className="form-group full-width" style={{ marginBottom: '16px' }}>
-                    <label>Materiales (Proveedores/Almacén)</label>
-                    <div style={{ position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>€</span>
-                      <input 
-                        type="number" 
-                        value={r.g.materiales || ''} 
-                        onChange={(e) => updateGastos(obra.id, 'materiales', e.target.value)}
-                        style={{ paddingLeft: '28px', textAlign: 'right' }}
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                  <div className="form-group full-width" style={{ marginBottom: '16px' }}>
-                    <label>Subcontratas (Fontanería, Cía, etc)</label>
-                    <div style={{ position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>€</span>
-                      <input 
-                        type="number" 
-                        value={r.g.subcontratas || ''} 
-                        onChange={(e) => updateGastos(obra.id, 'subcontratas', e.target.value)}
-                        style={{ paddingLeft: '28px', textAlign: 'right' }}
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                  <div className="form-group full-width" style={{ marginBottom: '24px' }}>
-                    <label>Otros Gastos (Licencias, varios)</label>
-                    <div style={{ position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>€</span>
-                      <input 
-                        type="number" 
-                        value={r.g.otros || ''} 
-                        onChange={(e) => updateGastos(obra.id, 'otros', e.target.value)}
-                        style={{ paddingLeft: '28px', textAlign: 'right' }}
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
+                  {[{key:'personal',label:'Personal (por trabajador)',placeholder:'Ej: Juan Fontanero'},{key:'materiales',label:'Materiales (por proveedor)',placeholder:'Ej: Leroy Merlín'},{key:'subcontratas',label:'Subcontratas',placeholder:'Ej: Fontanería López'},{key:'otros',label:'Otros gastos',placeholder:'Ej: Licencia de obra'}].map(cat => {
+                    const lineas = Array.isArray(r.g[cat.key]) ? r.g[cat.key] : [];
+                    return (
+                      <div key={cat.key} style={{ marginBottom: '20px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)' }}>{cat.label}</label>
+                          <button type="button" onClick={() => {
+                            const updated = [...lineas, { concepto: '', importe: 0 }];
+                            updateGastos(obra.id, cat.key, updated);
+                          }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3b82f6', fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}><Plus size={12} /> Añadir línea</button>
+                        </div>
+                        {lineas.length === 0 && <div style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic' }}>Sin líneas. Pulsa + para desglosar.</div>}
+                        {lineas.map((l, idx) => (
+                          <div key={idx} style={{ display: 'flex', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
+                            <input type="text" value={l.concepto} placeholder={cat.placeholder} onChange={(e) => {
+                              const updated = [...lineas]; updated[idx] = { ...updated[idx], concepto: e.target.value };
+                              updateGastos(obra.id, cat.key, updated);
+                            }} style={{ flex: 1, fontSize: '12px', padding: '6px 8px' }} />
+                            <div style={{ position: 'relative', width: '100px' }}>
+                              <span style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '11px' }}>€</span>
+                              <input type="number" value={l.importe || ''} placeholder="0" onChange={(e) => {
+                                const updated = [...lineas]; updated[idx] = { ...updated[idx], importe: Number(e.target.value) || 0 };
+                                updateGastos(obra.id, cat.key, updated);
+                              }} style={{ width: '100%', paddingLeft: '22px', textAlign: 'right', fontSize: '12px', padding: '6px 8px 6px 22px' }} />
+                            </div>
+                            <button onClick={() => {
+                              const updated = lineas.filter((_, i) => i !== idx);
+                              updateGastos(obra.id, cat.key, updated);
+                            }} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: '2px' }}><Trash2 size={12} /></button>
+                          </div>
+                        ))}
+                        {lineas.length > 0 && <div style={{ textAlign: 'right', fontSize: '11px', fontWeight: 600, color: '#64748b', marginTop: '4px' }}>Subtotal: {formatCurrency(sumLineas(lineas))}</div>}
+                      </div>
+                    );
+                  })}
 
                   <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>

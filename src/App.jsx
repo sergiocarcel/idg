@@ -22,7 +22,7 @@ function App() {
   const [appData, setAppData] = useState({
     clientes: [], obras: [], presupuestos: [], pedidos: [], materiales: [], 
     proveedores: [], trabajadores: [], registroHoras: [], documentosRRHH: [], 
-    facturas: [], catalogoPartidas: [], config: { empresa: null, usuarios: [] }
+    facturas: [], catalogoPartidas: [], tareasDashboard: [], config: { empresa: null, usuarios: [] }
   });
 
   const [loading, setLoading] = useState(true);
@@ -48,7 +48,7 @@ function App() {
       await seedDatabaseIfNeeded();
       
       const unsubs = [];
-      const cols = ['clientes', 'obras', 'presupuestos', 'pedidos', 'materiales', 'proveedores', 'trabajadores', 'registroHoras', 'documentosRRHH', 'facturas', 'catalogoPartidas'];
+      const cols = ['clientes', 'obras', 'presupuestos', 'pedidos', 'materiales', 'proveedores', 'trabajadores', 'registroHoras', 'documentosRRHH', 'facturas', 'catalogoPartidas', 'tareasDashboard'];
       
       cols.forEach(col => {
         const unsub = listenToCollection(col, (data) => {
@@ -92,7 +92,7 @@ function App() {
     <BrowserRouter>
       <Layout userRole={userRole} userName={userName}>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<Dashboard data={appData} setData={setAppData} />} />
           <Route path="/clientes" element={<Clientes data={appData} setData={setAppData} />} />
           <Route path="/obras" element={<Obras data={appData} setData={setAppData} />} />
           <Route path="/presupuestos" element={<Presupuestos data={appData} setData={setAppData} />} />
