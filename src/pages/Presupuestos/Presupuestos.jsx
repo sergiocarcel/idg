@@ -1,17 +1,34 @@
-import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, FileText, Download, Copy, Eye, Send, Lock, BookOpen, RotateCcw, Mail, Link2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Edit2, Trash2, FileText, Download, Copy, Eye, Send, Lock, BookOpen, RotateCcw, Mail, Link2, X, MoreHorizontal, CheckCircle, Printer } from 'lucide-react';
+import { openWhatsApp, openEmailComposer } from '../../utils/sendUtils';
 import { saveDoc, deleteDoc } from '../../services/db';
 import PresupuestoEditor from './PresupuestoEditor.jsx';
 import PresupuestoPrint from './PresupuestoPrint.jsx';
 import CatalogoPartidas from './CatalogoPartidas.jsx';
 
-export default function Presupuestos({ data, setData }) {
+export default function Presupuestos({ data, setData, forceMode }) {
   const [filter, setFilter] = useState('todos');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isCatalogoOpen, setIsCatalogoOpen] = useState(false);
   const [selectedPpto, setSelectedPpto] = useState(null);
   const [printPpto, setPrintPpto] = useState(null);
   const [printMode, setPrintMode] = useState('cliente');
+  const [linkObraModal, setLinkObraModal] = useState(null); // ppto pendiente de vincular a obra
+  const [openMenu, setOpenMenu] = useState(null); // ppto.id for "more" dropdown
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!openMenu) return;
+    const close = (e) => {
+      // Don't close if clicking inside the dropdown
+      if (e.target.closest('[data-menu-dropdown]')) return;
+      setOpenMenu(null);
+    };
+    // Use setTimeout so the listener is added after the current click event
+    const timer = setTimeout(() => document.addEventListener('click', close), 0);
+    return () => { clearTimeout(timer); document.removeEventListener('click', close); };
+  }, [openMenu]);
+
 
   const presupuestos = data?.presupuestos || [];
   const clientes = data?.clientes || [];
@@ -175,44 +192,82 @@ export default function Presupuestos({ data, setData }) {
                     </div>
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                      <button className="icon-btn" onClick={() => handleEdit(ppto)} title="Ver / Editar"><Edit2 size={14} /></button>
-                      
-                      {ppto.estado !== 'borrador' && (
-                         <a 
-                            href={`https://wa.me/34${clientes.find(c => c.id === ppto.clienteId)?.telefono?.replace(/\D/g,'') || ''}?text=${encodeURIComponent('Hola '+getClientName(ppto.clienteId)+', te enviamos el estado de tu presupuesto '+ppto.id+'. Saludos desde IDG.')}`} 
-                            target="_blank" rel="noreferrer" 
-                            className="icon-btn" 
-                            title="Avisar por WhatsApp"
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#25D366' }}
-                         >
-                           <Send size={14} />
-                         </a>
-                      )}
-                      
-                      <button className="icon-btn" onClick={() => { setPrintMode('cliente'); setPrintPpto(ppto); }} title="Generar PDF (Cliente)"><Download size={14} /></button>
-                      <button className="icon-btn" onClick={() => { setPrintMode('interno'); setPrintPpto(ppto); }} title="Generar PDF (Interno)" style={{ color: '#8b5cf6' }}><Lock size={14} /></button>
-                      
-                      {ppto.estado === 'enviado' && (
-                        <button className="icon-btn" onClick={async () => { await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'aceptado' }); }} title="Marcar como Aceptado" style={{ color: '#16a34a' }}><Link2 size={14} /></button>
-                      )}
+                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                      {/* Siempre visible: Editar */}
+                      <button className="icon-btn" onClick={() => handleEdit(ppto)} title="Editar presupuesto"><Edit2 size={14} /></button>
 
-                      {ppto.estado !== 'borrador' && (
-                        <a 
-                          href={`mailto:${clientes.find(c => c.id === ppto.clienteId)?.email || ''}?subject=${encodeURIComponent('Presupuesto ' + ppto.id + ' - IDG')}&body=${encodeURIComponent('Estimado/a ' + getClientName(ppto.clienteId) + ',\n\nAdjuntamos el presupuesto referencia ' + ppto.id + ' por un importe de ' + formatCurrency(calculateTotal(ppto)) + ' (+ IVA).\n\nQuedamos a su disposición.\nSaludos,\nIDG')}`}
-                          className="icon-btn" title="Enviar por Email" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}
-                        >
-                          <Mail size={14} />
-                        </a>
-                      )}
+                      {/* Siempre visible: PDF Cliente */}
+                      <button className="icon-btn" onClick={() => { setPrintMode('cliente'); setPrintPpto(ppto); }} title="Generar PDF"><Printer size={14} /></button>
 
+                      {/* Papelera / Restaurar */}
                       {ppto.estado !== 'eliminado' ? (
                         <button className="icon-btn danger" onClick={async () => { if(window.confirm('¿Mover a papelera?')) await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'eliminado' }); }} title="Mover a papelera"><Trash2 size={14} /></button>
                       ) : (
                         <>
-                          <button className="icon-btn" onClick={async () => { await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'borrador' }); }} title="Restaurar de Papelera" style={{ color: '#16a34a' }}><RotateCcw size={14} /></button>
+                          <button className="icon-btn" onClick={async () => { await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'borrador' }); }} title="Restaurar" style={{ color: '#16a34a' }}><RotateCcw size={14} /></button>
                           <button className="icon-btn danger" onClick={async () => { if(window.confirm('¿Eliminar PERMANENTEMENTE?')) await deleteDoc('presupuestos', ppto.id); }} title="Eliminar definitivo"><Trash2 size={14} /></button>
                         </>
+                      )}
+
+                      {/* Menú "Más opciones" */}
+                      {ppto.estado !== 'eliminado' && (
+                        <div style={{ position: 'relative' }}>
+                          <button className="icon-btn" onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === ppto.id ? null : ppto.id); }} title="Más opciones"><MoreHorizontal size={14} /></button>
+                          {openMenu === ppto.id && (
+                            <div data-menu-dropdown style={{
+                              position: 'absolute', right: 0, top: '100%', marginTop: '4px',
+                              background: '#fff', border: '1px solid var(--border)', borderRadius: '8px',
+                              boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 50,
+                              width: '200px', padding: '4px 0', fontSize: '12px'
+                            }}>
+                              {/* PDF Dirección */}
+                              <button onClick={() => { setPrintMode('direccion'); setPrintPpto(ppto); setOpenMenu(null); }}
+                                style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626', textAlign: 'left' }}>
+                                <Printer size={13} /> PDF Dirección (Coste)
+                              </button>
+                              <div style={{ height: '1px', background: '#f1f5f9', margin: '4px 0' }} />
+                              {/* WhatsApp */}
+                              {ppto.estado !== 'borrador' && (
+                                <button onClick={() => {
+                                  openWhatsApp(
+                                    clientes.find(c => c.id === ppto.clienteId)?.telefono || '',
+                                    'Hola ' + getClientName(ppto.clienteId) + ', te enviamos el presupuesto ' + ppto.id + ' por importe de ' + formatCurrency(calculateTotal(ppto)) + ' (+ IVA). Saludos, IDG.'
+                                  );
+                                  setOpenMenu(null);
+                                }}
+                                  style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#25D366', textAlign: 'left' }}>
+                                  <Send size={13} /> Enviar por WhatsApp
+                                </button>
+                              )}
+                              {/* Email */}
+                              {ppto.estado !== 'borrador' && (
+                                <button
+                                  onClick={() => {
+                                    openEmailComposer(
+                                      clientes.find(c => c.id === ppto.clienteId)?.email || '',
+                                      'Presupuesto ' + ppto.id + ' - IDG',
+                                      'Estimado/a ' + getClientName(ppto.clienteId) + ',\n\nAdjuntamos el presupuesto referencia ' + ppto.id + ' por un importe de ' + formatCurrency(calculateTotal(ppto)) + ' (+ IVA).\n\nQuedamos a su disposición.\nSaludos,\nIDG'
+                                    );
+                                    setOpenMenu(null);
+                                  }}
+                                  style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#2563eb', textAlign: 'left' }}>
+                                  <Mail size={13} /> Enviar por Email
+                                </button>
+                              )}
+                              {/* Marcar como Aceptado */}
+                              {ppto.estado === 'enviado' && (
+                                <button onClick={async () => {
+                                  await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'aceptado' });
+                                  if (!ppto.obraId) setLinkObraModal(ppto);
+                                  setOpenMenu(null);
+                                }}
+                                  style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#16a34a', textAlign: 'left' }}>
+                                  <CheckCircle size={13} /> Marcar como Aceptado
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </td>
@@ -236,7 +291,7 @@ export default function Presupuestos({ data, setData }) {
         <PresupuestoPrint
           ppto={printPpto}
           data={data}
-          mode={printMode}
+          mode={forceMode || printMode}
           onClose={() => setPrintPpto(null)}
         />
       )}
@@ -244,6 +299,39 @@ export default function Presupuestos({ data, setData }) {
       {isCatalogoOpen && (
         <CatalogoPartidas data={data} onClose={() => setIsCatalogoOpen(false)} />
       )}
+
+      {/* Modal vincular presupuesto aceptado a obra */}
+      {linkObraModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>Vincular a Obra</h2>
+              <button className="icon-btn" onClick={() => setLinkObraModal(null)} style={{ background: 'none' }}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                El presupuesto <strong>{linkObraModal.id}</strong> ha sido aceptado. Selecciona la obra a la que vincular:
+              </p>
+              <select id="linkObraSelect" style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
+                <option value="">Selecciona obra...</option>
+                {(data?.obras || []).map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+              </select>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setLinkObraModal(null)}>Omitir</button>
+              <button className="btn-primary" onClick={async () => {
+                const obraId = document.getElementById('linkObraSelect').value;
+                if (!obraId) return;
+                await saveDoc('presupuestos', linkObraModal.id, { ...linkObraModal, estado: 'aceptado', obraId });
+                const obra = (data?.obras || []).find(o => o.id === obraId);
+                if (obra) await saveDoc('obras', obraId, { ...obra, presupuestoId: linkObraModal.id });
+                setLinkObraModal(null);
+              }}>Vincular</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

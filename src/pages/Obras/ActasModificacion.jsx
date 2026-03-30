@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, X, Trash2, FileText, PenTool } from 'lucide-react';
 import { saveDoc } from '../../services/db';
-import SignatureCanvas from './SignatureCanvas.jsx';
+import SignatureCanvas from '../../components/shared/SignatureCanvas.jsx';
 
 export default function ActasModificacion({ obra, onClose }) {
   const [actas, setActas] = useState(obra.actas || []);

@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalIcon, MapPin, Clock, Video, RefreshCw, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalIcon, MapPin, Clock, RefreshCw, X } from 'lucide-react';
 import { auth, firebase } from '../../config/firebase';
+import { saveDoc, deleteDoc } from '../../services/db';
+import { sendEmail } from '../../utils/sendUtils';
 
 export default function Calendario({ data, setData }) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  
-  // Dummy local fallback events
-  const [eventos, setEventos] = useState(data?.eventos || [
-    { id: 1, title: 'Reunión Presupuesto', date: new Date().toISOString().split('T')[0], type: 'reunion', time: '16:30', location: 'Oficina' },
-  ]);
+
+  // Eventos desde Firestore (ya vienen via App.jsx listener)
+  const eventos = data?.eventos || [];
+
   const [gcalToken, setGcalToken] = useState(localStorage.getItem('gcal_token'));
   const [isSyncing, setIsSyncing] = useState(false);
-  
+
   // Modal State for New Event
   const [showEventModal, setShowEventModal] = useState(false);
-  const [newEvent, setNewEvent] = useState({ title: '', date: '', time: '10:00', location: '' });
+  const [newEvent, setNewEvent] = useState({ title: '', date: '', time: '10:00', location: '', type: 'reunion', participantes: [], notificarAntes: 60 });
 
   const getDaysInMonth = (date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -41,9 +42,12 @@ export default function Calendario({ data, setData }) {
       case 'reunion': return { bg: '#dbeafe', color: '#2563eb' };
       case 'entrega': return { bg: '#fef3c7', color: '#d97706' };
       case 'obra': return { bg: '#f3e8ff', color: '#9333ea' };
+      case 'gcal': return { bg: '#e0e7ff', color: '#3730a3' };
       default: return { bg: '#f1f5f9', color: '#475569' };
     }
   };
+
+  // ─── Google Calendar Sync ─────────────────────────────
 
   const handleGoogleSync = async () => {
     try {
@@ -51,11 +55,11 @@ export default function Calendario({ data, setData }) {
       const provider = new firebase.auth.GoogleAuthProvider();
       provider.addScope('https://www.googleapis.com/auth/calendar.readonly');
       provider.addScope('https://www.googleapis.com/auth/calendar.events');
-      
+
       const result = await auth.signInWithPopup(provider);
       const credential = result.credential || firebase.auth.GoogleAuthProvider.credentialFromResult(result);
       const token = credential?.accessToken;
-      
+
       if (token) {
         localStorage.setItem('gcal_token', token);
         setGcalToken(token);
@@ -63,7 +67,7 @@ export default function Calendario({ data, setData }) {
       }
     } catch (error) {
       console.error("Error OAuth Sync:", error);
-      alert("Para activar la sincronización, Google Requiere que configures el ID de Cliente OAuth en tu consola Firebase/GCP y uses el modo producción (Sin Emuladores Locales).");
+      alert("Para activar la sincronización, Google requiere que configures el ID de Cliente OAuth en tu consola Firebase/GCP y uses el modo producción (Sin Emuladores Locales).");
     } finally {
       setIsSyncing(false);
     }
@@ -73,26 +77,34 @@ export default function Calendario({ data, setData }) {
     if (!token) return;
     try {
       setIsSyncing(true);
-      
+
       const startD = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString();
       const endD = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59).toISOString();
-      
+
       const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${startD}&timeMax=${endD}&singleEvents=true&orderBy=startTime`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       if(!res.ok) throw new Error("Token caducado o inválido");
-      
-      const data = await res.json();
-      const mappedEvents = data.items.map(i => ({
-        id: i.id,
+
+      const gcalData = await res.json();
+      const mappedEvents = gcalData.items.map(i => ({
+        id: 'gcal-' + i.id,
         title: i.summary || '(Sin título)',
         date: i.start.dateTime ? i.start.dateTime.split('T')[0] : i.start.date,
         time: i.start.dateTime ? new Date(i.start.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Todo el día',
         location: i.location || '',
-        type: 'gcal'
+        type: 'gcal',
+        googleEventId: i.id
       }));
-      setEventos(mappedEvents);
+
+      // Guardar eventos de GCal en Firestore (merge con existentes)
+      for (const evt of mappedEvents) {
+        const existing = eventos.find(e => e.googleEventId === evt.googleEventId);
+        if (!existing) {
+          await saveDoc('eventos', evt.id, evt);
+        }
+      }
     } catch(err) {
       console.error(err);
       setGcalToken(null);
@@ -106,15 +118,53 @@ export default function Calendario({ data, setData }) {
     if (gcalToken) loadGoogleEvents(gcalToken);
   }, [currentDate, gcalToken]);
 
+  // ─── CRUD Eventos ─────────────────────────────────────
+
   const handleCreateEvent = async () => {
     if (!newEvent.title || !newEvent.date) return;
-    
-    // Optimistic UI Update local
-    const dummyId = 'loc-' + Date.now();
-    setEventos([...eventos, { id: dummyId, ...newEvent, type: 'reunion' }]);
-    setShowEventModal(false);
 
-    // Si GCal está enlazado, forzamos sincronización externa POST
+    const eventId = 'EVT-' + Date.now();
+    const eventData = {
+      ...newEvent,
+      id: eventId,
+      createdBy: auth.currentUser?.email || 'sistema',
+      createdAt: new Date().toISOString()
+    };
+
+    await saveDoc('eventos', eventId, eventData);
+
+    // Crear notificación in-app para cada participante
+    if (newEvent.participantes.length > 0) {
+      for (const participante of newEvent.participantes) {
+        const notifId = 'NOTIF-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+        await saveDoc('notificaciones', notifId, {
+          id: notifId,
+          tipo: 'info',
+          mensaje: `Nuevo evento: "${newEvent.title}" el ${new Date(newEvent.date).toLocaleDateString()} a las ${newEvent.time}. Participante: ${participante}`,
+          leida: false,
+          fecha: new Date().toISOString(),
+          link: '/calendario'
+        });
+      }
+    }
+
+    // Enviar email a participantes que tengan email (buscar en trabajadores)
+    const trabajadores = data?.trabajadores || [];
+    for (const nombre of newEvent.participantes) {
+      const trab = trabajadores.find(t => t.nombre === nombre || (t.nombre + ' ' + (t.apellidos || '')).trim() === nombre);
+      if (trab?.email) {
+        try {
+          await sendEmail(trab.email, `Evento: ${newEvent.title}`, `Has sido invitado al evento "${newEvent.title}" el ${new Date(newEvent.date).toLocaleDateString()} a las ${newEvent.time}. Lugar: ${newEvent.location || 'Por definir'}.`);
+        } catch (err) {
+          console.error('Error enviando email a', trab.email, err);
+        }
+      }
+    }
+
+    setShowEventModal(false);
+    setNewEvent({ title: '', date: '', time: '10:00', location: '', type: 'reunion', participantes: [], notificarAntes: 60 });
+
+    // Si GCal está enlazado, crear en Google Calendar también
     if (gcalToken) {
       const gcalEvt = {
         summary: newEvent.title,
@@ -128,12 +178,24 @@ export default function Calendario({ data, setData }) {
           headers: { Authorization: `Bearer ${gcalToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(gcalEvt)
         });
-        loadGoogleEvents(gcalToken); // Recargar info veraz
       } catch(err) {
         console.error("No se pudo crear evento en GCal", err);
       }
     }
   };
+
+  const handleDeleteEvent = async (eventId) => {
+    if (!window.confirm('¿Eliminar evento?')) return;
+    await deleteDoc('eventos', eventId);
+  };
+
+  // Filtrar eventos del mes actual para la sidebar
+  const currentMonthEvents = eventos
+    .filter(e => {
+      const d = new Date(e.date);
+      return d.getMonth() === currentDate.getMonth() && d.getFullYear() === currentDate.getFullYear();
+    })
+    .sort((a, b) => new Date(a.date + 'T' + (a.time || '00:00')) - new Date(b.date + 'T' + (b.time || '00:00')));
 
   return (
     <div className="page-container">
@@ -144,7 +206,7 @@ export default function Calendario({ data, setData }) {
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           <button className="btn-secondary" onClick={handleGoogleSync} disabled={isSyncing} style={{ background: isSyncing ? '#f1f5f9' : '#fff' }}>
-            {isSyncing ? <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={16} />} 
+            {isSyncing ? <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={16} />}
             {gcalToken ? 'Sincronizado' : 'Vincular Google'}
           </button>
           <button className="btn-primary" onClick={() => setShowEventModal(true)}>
@@ -154,7 +216,7 @@ export default function Calendario({ data, setData }) {
       </header>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: '24px' }}>
-        
+
         {/* Main Calendar View */}
         <div className="stat-card" style={{ padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
@@ -189,15 +251,15 @@ export default function Calendario({ data, setData }) {
                     {d}
                   </div>
                   {dayEvents.map(e => {
-                    const style = e.type === 'gcal' ? { bg: '#e0e7ff', color: '#3730a3' } : getTypeStyle(e.type);
+                    const style = getTypeStyle(e.type);
                     return (
                       <div key={e.id} style={{ borderLeft: `2px solid ${style.color}`, background: style.bg, color: style.color, fontSize: '10px', fontWeight: 600, padding: '4px 6px', borderRadius: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}>
                         {e.time} - {e.title}
                       </div>
-                    )
+                    );
                   })}
                 </div>
-              )
+              );
             })}
           </div>
         </div>
@@ -206,13 +268,18 @@ export default function Calendario({ data, setData }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div className="stat-card" style={{ padding: '20px' }}>
             <h3 style={{ fontSize: '14px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <CalIcon size={16} className="text-blue-500" /> Próximos Eventos
+              <CalIcon size={16} /> Próximos Eventos
             </h3>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {eventos.map(e => (
+              {currentMonthEvents.map(e => (
                 <div key={e.id} style={{ padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                  <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-main)', marginBottom: '6px' }}>{e.title}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-main)', marginBottom: '6px' }}>{e.title}</div>
+                    <span style={{ ...getTypeStyle(e.type), padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 700, background: getTypeStyle(e.type).bg, color: getTypeStyle(e.type).color }}>
+                      {e.type?.toUpperCase()}
+                    </span>
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>
                     <Clock size={12} /> {new Date(e.date).toLocaleDateString()} a las {e.time}
                   </div>
@@ -221,10 +288,17 @@ export default function Calendario({ data, setData }) {
                       <MapPin size={12} /> {e.location}
                     </div>
                   )}
+                  {e.participantes?.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                      {e.participantes.map((p, i) => (
+                        <span key={i} style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 600 }}>{p}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
-              {eventos.length === 0 && (
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>No hay eventos próximos.</div>
+              {currentMonthEvents.length === 0 && (
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>No hay eventos este mes.</div>
               )}
             </div>
           </div>
@@ -253,15 +327,51 @@ export default function Calendario({ data, setData }) {
                 <label>Hora</label>
                 <input type="time" value={newEvent.time} onChange={e => setNewEvent({...newEvent, time: e.target.value})} />
               </div>
-              <div className="form-group full-width">
+              <div className="form-group half-width">
+                <label>Tipo</label>
+                <select value={newEvent.type} onChange={e => setNewEvent({...newEvent, type: e.target.value})}>
+                  <option value="reunion">Reunión</option>
+                  <option value="visita">Visita</option>
+                  <option value="entrega">Entrega</option>
+                  <option value="obra">Obra</option>
+                </select>
+              </div>
+              <div className="form-group half-width">
                 <label>Ubicación</label>
-                <input type="text" value={newEvent.location} onChange={e => setNewEvent({...newEvent, location: e.target.value})} placeholder="Dirección física o Google Meet" />
+                <input type="text" value={newEvent.location} onChange={e => setNewEvent({...newEvent, location: e.target.value})} placeholder="Dirección o Meet" />
+              </div>
+              <div className="form-group full-width">
+                <label>Participantes</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                  {(newEvent.participantes || []).map((p, i) => (
+                    <span key={i} style={{ background: '#dbeafe', color: '#2563eb', padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      {p}
+                      <button onClick={() => setNewEvent({...newEvent, participantes: newEvent.participantes.filter((_, idx) => idx !== i)})} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', padding: 0, fontSize: '14px', lineHeight: 1 }}>&times;</button>
+                    </span>
+                  ))}
+                </div>
+                <select onChange={e => { if (e.target.value && !newEvent.participantes.includes(e.target.value)) { setNewEvent({...newEvent, participantes: [...newEvent.participantes, e.target.value]}); } e.target.value = ''; }}>
+                  <option value="">Añadir participante...</option>
+                  {(data?.trabajadores || []).filter(t => !newEvent.participantes.includes(t.nombre)).map(t => (
+                    <option key={t.id} value={t.nombre}>{t.nombre} {t.apellidos || ''} — {t.rol || 'Operario'}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group full-width">
+                <label>Notificar antes (minutos)</label>
+                <select value={newEvent.notificarAntes} onChange={e => setNewEvent({...newEvent, notificarAntes: Number(e.target.value)})}>
+                  <option value={0}>Sin recordatorio</option>
+                  <option value={15}>15 minutos antes</option>
+                  <option value={30}>30 minutos antes</option>
+                  <option value={60}>1 hora antes</option>
+                  <option value={1440}>1 día antes</option>
+                </select>
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn-secondary" onClick={() => setShowEventModal(false)}>Cancelar</button>
               <button className="btn-primary" onClick={handleCreateEvent}>
-                {gcalToken ? 'Añadir al CRM y Google Calendar' : 'Guardar interno'}
+                {gcalToken ? 'Añadir al CRM y Google Calendar' : 'Guardar Evento'}
               </button>
             </div>
           </div>

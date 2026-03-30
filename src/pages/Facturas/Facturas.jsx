@@ -7,6 +7,8 @@ export default function Facturas({ data, setData }) {
 
   const obras = data?.obras || [];
   const presupuestos = data?.presupuestos || [];
+  const trabajadores = data?.trabajadores || [];
+  const proveedores = data?.proveedores || [];
 
   const updateGastos = async (obraId, field, value) => {
     const obra = obras.find(o => o.id === obraId);
@@ -32,8 +34,8 @@ export default function Facturas({ data, setData }) {
 
   const calculateRentabilidad = (obra) => {
     const presupuestado = getPresupuestoAceptado(obra.id);
-    const g = obra.gastosReales || { personal: [], materiales: [], subcontratas: [], otros: [] };
-    const gastosTotal = sumLineas(g.personal) + sumLineas(g.materiales) + sumLineas(g.subcontratas) + sumLineas(g.otros);
+    const g = obra.gastosReales || { personal: [], materiales: [], subcontratas: [], gasolina_mantenimiento: [], herramienta_alquileres: [], otros: [] };
+    const gastosTotal = sumLineas(g.personal) + sumLineas(g.materiales) + sumLineas(g.subcontratas) + sumLineas(g.gasolina_mantenimiento) + sumLineas(g.herramienta_alquileres) + sumLineas(g.otros);
     const margen = presupuestado - gastosTotal;
     const porcentaje = presupuestado > 0 ? (margen / presupuestado) * 100 : 0;
     return { presupuestado, gastosTotal, margen, porcentaje, g };
@@ -161,7 +163,7 @@ export default function Facturas({ data, setData }) {
                   <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 4px', color: 'var(--text-main)' }}>Imputar Gastos (Detallado)</h3>
                   <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '20px' }}>{obra.nombre}</p>
 
-                  {[{key:'personal',label:'Personal (por trabajador)',placeholder:'Ej: Juan Fontanero'},{key:'materiales',label:'Materiales (por proveedor)',placeholder:'Ej: Leroy Merlín'},{key:'subcontratas',label:'Subcontratas',placeholder:'Ej: Fontanería López'},{key:'otros',label:'Otros gastos',placeholder:'Ej: Licencia de obra'}].map(cat => {
+                  {[{key:'personal',label:'Personal (por trabajador/nómina)',placeholder:'Ej: Juan Fontanero',suggestions: trabajadores.map(t => t.nombre + (t.apellidos ? ' ' + t.apellidos : ''))},{key:'materiales',label:'Materiales (por proveedor)',placeholder:'Ej: Leroy Merlín',suggestions: proveedores.map(p => p.nombre)},{key:'subcontratas',label:'Subcontratas (por empresa/gremio)',placeholder:'Ej: Fontanería López',suggestions: proveedores.map(p => p.nombre)},{key:'gasolina_mantenimiento',label:'Gasolina y Mantenimiento',placeholder:'Ej: Gasolina furgoneta',suggestions:[]},{key:'herramienta_alquileres',label:'Herramienta y Alquileres',placeholder:'Ej: Alquiler andamio',suggestions:[]},{key:'otros',label:'Otros gastos generales',placeholder:'Ej: Licencia de obra',suggestions:[]}].map(cat => {
                     const lineas = Array.isArray(r.g[cat.key]) ? r.g[cat.key] : [];
                     return (
                       <div key={cat.key} style={{ marginBottom: '20px' }}>
@@ -175,10 +177,21 @@ export default function Facturas({ data, setData }) {
                         {lineas.length === 0 && <div style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic' }}>Sin líneas. Pulsa + para desglosar.</div>}
                         {lineas.map((l, idx) => (
                           <div key={idx} style={{ display: 'flex', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
-                            <input type="text" value={l.concepto} placeholder={cat.placeholder} onChange={(e) => {
-                              const updated = [...lineas]; updated[idx] = { ...updated[idx], concepto: e.target.value };
-                              updateGastos(obra.id, cat.key, updated);
-                            }} style={{ flex: 1, fontSize: '12px', padding: '6px 8px' }} />
+                            {cat.suggestions.length > 0 ? (
+                              <select value={l.concepto} onChange={(e) => {
+                                const updated = [...lineas]; updated[idx] = { ...updated[idx], concepto: e.target.value };
+                                updateGastos(obra.id, cat.key, updated);
+                              }} style={{ flex: 1, fontSize: '12px', padding: '6px 8px' }}>
+                                <option value="">{cat.placeholder}</option>
+                                {cat.suggestions.map((s, i) => <option key={i} value={s}>{s}</option>)}
+                                {l.concepto && !cat.suggestions.includes(l.concepto) && <option value={l.concepto}>{l.concepto}</option>}
+                              </select>
+                            ) : (
+                              <input type="text" value={l.concepto} placeholder={cat.placeholder} onChange={(e) => {
+                                const updated = [...lineas]; updated[idx] = { ...updated[idx], concepto: e.target.value };
+                                updateGastos(obra.id, cat.key, updated);
+                              }} style={{ flex: 1, fontSize: '12px', padding: '6px 8px' }} />
+                            )}
                             <div style={{ position: 'relative', width: '100px' }}>
                               <span style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '11px' }}>€</span>
                               <input type="number" value={l.importe || ''} placeholder="0" onChange={(e) => {

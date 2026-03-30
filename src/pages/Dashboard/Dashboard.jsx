@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { 
-  Briefcase, FileText, TrendingUp, TrendingDown, AlertTriangle, 
-  Calendar, Clock, CheckCircle2, Circle, Plus, X, Trash2, 
+import { useNavigate } from 'react-router-dom';
+import {
+  Briefcase, FileText, TrendingUp, TrendingDown, AlertTriangle,
+  Calendar, Clock, CheckCircle2, Circle, Plus, X, Trash2,
   DollarSign, Receipt
 } from 'lucide-react';
 import { saveDoc, deleteDoc } from '../../services/db';
 
 export default function Dashboard({ data, setData }) {
+  const navigate = useNavigate();
   const [showTaskModal, setShowTaskModal] = useState(false);
-  const [newTask, setNewTask] = useState({ titulo: '', prioridad: 'media' });
+  const [newTask, setNewTask] = useState({ titulo: '', prioridad: 'media', fechaVencimiento: '' });
 
   const obras = data?.obras || [];
   const presupuestos = data?.presupuestos || [];
@@ -121,7 +123,7 @@ export default function Dashboard({ data, setData }) {
     const id = 'TASK-' + Date.now();
     await saveDoc('tareasDashboard', id, { ...newTask, id, completada: false, fecha: new Date().toISOString() });
     setShowTaskModal(false);
-    setNewTask({ titulo: '', prioridad: 'media' });
+    setNewTask({ titulo: '', prioridad: 'media', fechaVencimiento: '' });
   };
 
   const toggleTask = async (task) => {
@@ -139,6 +141,24 @@ export default function Dashboard({ data, setData }) {
   const ivaSoportado = gastosRealesTotal * 0.21;
   const ivaAPagar = ivaRepercutido - ivaSoportado;
 
+  // ══════════════════════════════════════
+  // SEMÁFORO DE URGENCIA
+  // ══════════════════════════════════════
+  const getSemaforoColor = (dateStr) => {
+    if (!dateStr) return '#16a34a';
+    const diff = Math.floor((new Date(dateStr).getTime() - Date.now()) / 86400000);
+    if (diff <= 1) return '#dc2626';      // rojo: hoy o mañana
+    if (diff <= 7) return '#d97706';      // amarillo: esta semana
+    return '#16a34a';                     // verde: sin urgencia
+  };
+
+  // Helper para deducir ruta de navegación desde alerta
+  const getAlertRoute = (alertId) => {
+    if (alertId.startsWith('ppto-')) return '/presupuestos';
+    if (alertId.startsWith('obra-')) return '/obras';
+    return '/';
+  };
+
   return (
     <div className="page-container">
       <header className="page-header">
@@ -148,50 +168,9 @@ export default function Dashboard({ data, setData }) {
         </div>
       </header>
 
-      {/* ═══ FILA 1: KPIs PRINCIPALES ═══ */}
-      <div className="dashboard-grid" style={{ marginBottom: '24px' }}>
-        <div className="stat-card" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(37,99,235,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}><Briefcase size={18} /></div>
-            <h3 style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Obras Activas</h3>
-          </div>
-          <div className="stat-value" style={{ fontSize: '32px' }}>{obrasActivas}</div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{obras.length} total · {obras.filter(o => o.estado === 'finalizada').length} finalizadas</div>
-        </div>
-
-        <div className="stat-card" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(217,119,6,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d97706' }}><FileText size={18} /></div>
-            <h3 style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Presupuestos Pendientes</h3>
-          </div>
-          <div className="stat-value" style={{ fontSize: '32px' }}>{pptosPendientes}</div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{pptosAceptados.length} aceptados · {presupuestos.filter(p => p.estado === 'rechazado').length} rechazados</div>
-        </div>
-
-        <div className="stat-card" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: margenPct > 15 ? 'rgba(22,163,74,0.1)' : (margenPct > 0 ? 'rgba(217,119,6,0.1)' : 'rgba(220,38,38,0.1)'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: margenPct > 15 ? '#16a34a' : (margenPct > 0 ? '#d97706' : '#dc2626') }}>
-              {margenGlobal >= 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
-            </div>
-            <h3 style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Margen Neto Global</h3>
-          </div>
-          <div className="stat-value" style={{ fontSize: '28px', color: margenPct > 15 ? '#16a34a' : (margenPct > 0 ? '#d97706' : '#dc2626') }}>{formatCurrency(margenGlobal)}</div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{margenPct.toFixed(1)}% rentabilidad</div>
-        </div>
-
-        <div className="stat-card" style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(139,92,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8b5cf6' }}><DollarSign size={18} /></div>
-            <h3 style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Clientes</h3>
-          </div>
-          <div className="stat-value" style={{ fontSize: '32px' }}>{clientes.length}</div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{clientes.filter(c => obras.some(o => o.clienteId === c.id && o.estado === 'en_curso')).length} con obra en curso</div>
-        </div>
-      </div>
-
-      {/* ═══ FILA 2: GRID 3 COLUMNAS ═══ */}
+      {/* ═══ FILA 1: TAREAS / EVENTOS / AVISOS (prioridad máxima) ═══ */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px', marginBottom: '24px' }}>
-        
+
         {/* ── WIDGET 1: TAREAS PENDIENTES ── */}
         <div className="stat-card" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -207,28 +186,32 @@ export default function Dashboard({ data, setData }) {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {[...tareasPendientes].sort((a,b) => (a.completada ? 1 : 0) - (b.completada ? 1 : 0)).map(t => (
-                  <div key={t.id} style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '12px', opacity: t.completada ? 0.5 : 1 }}>
-                    <button onClick={() => toggleTask(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.completada ? '#16a34a' : '#cbd5e1', padding: 0 }}>
-                      {t.completada ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-                    </button>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-main)', textDecoration: t.completada ? 'line-through' : 'none' }}>{t.titulo}</div>
+                {[...tareasPendientes].sort((a,b) => (a.completada ? 1 : 0) - (b.completada ? 1 : 0)).map(t => {
+                  const semaforoColor = getSemaforoColor(t.fechaVencimiento);
+                  return (
+                    <div key={t.id} style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', borderLeft: `3px solid ${t.completada ? '#cbd5e1' : semaforoColor}`, display: 'flex', alignItems: 'center', gap: '12px', opacity: t.completada ? 0.5 : 1 }}>
+                      <button onClick={() => toggleTask(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.completada ? '#16a34a' : '#cbd5e1', padding: 0 }}>
+                        {t.completada ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                      </button>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-main)', textDecoration: t.completada ? 'line-through' : 'none' }}>{t.titulo}</div>
+                        {t.fechaVencimiento && <div style={{ fontSize: '10px', color: semaforoColor, fontWeight: 600, marginTop: '2px' }}>{new Date(t.fechaVencimiento).toLocaleDateString('es-ES')}</div>}
+                      </div>
+                      <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px',
+                        background: t.prioridad === 'alta' ? '#fef2f2' : (t.prioridad === 'baja' ? '#f0fdf4' : '#fffbeb'),
+                        color: t.prioridad === 'alta' ? '#dc2626' : (t.prioridad === 'baja' ? '#16a34a' : '#d97706')
+                      }}>{t.prioridad?.toUpperCase()}</span>
+                      <button onClick={() => removeTask(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', padding: '2px' }}><Trash2 size={12} /></button>
                     </div>
-                    <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px',
-                      background: t.prioridad === 'alta' ? '#fef2f2' : (t.prioridad === 'baja' ? '#f0fdf4' : '#fffbeb'),
-                      color: t.prioridad === 'alta' ? '#dc2626' : (t.prioridad === 'baja' ? '#16a34a' : '#d97706')
-                    }}>{t.prioridad?.toUpperCase()}</span>
-                    <button onClick={() => removeTask(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', padding: '2px' }}><Trash2 size={12} /></button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
 
-        {/* ── WIDGET 2: EVENTOS PRÓXIMOS ── */}
-        <div className="stat-card" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
+        {/* ── WIDGET 2: EVENTOS PRÓXIMOS (con semáforo) ── */}
+        <div className="stat-card" style={{ padding: 0, display: 'flex', flexDirection: 'column', cursor: 'pointer' }} onClick={() => navigate('/calendario')}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Calendar size={16} style={{ color: '#2563eb' }} /> Próximos Eventos
@@ -243,8 +226,8 @@ export default function Dashboard({ data, setData }) {
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {obrasProximas.map(o => (
                   <div key={`o-${o.id}`} style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Briefcase size={16} style={{ color: '#2563eb' }} />
+                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: `${getSemaforoColor(o.inicio)}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Briefcase size={16} style={{ color: getSemaforoColor(o.inicio) }} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)' }}>Inicio: {o.nombre}</div>
@@ -254,8 +237,8 @@ export default function Dashboard({ data, setData }) {
                 ))}
                 {proximosEventos.map(e => (
                   <div key={e.id} style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Clock size={16} style={{ color: '#16a34a' }} />
+                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: `${getSemaforoColor(e.date)}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Clock size={16} style={{ color: getSemaforoColor(e.date) }} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)' }}>{e.title}</div>
@@ -268,7 +251,7 @@ export default function Dashboard({ data, setData }) {
           </div>
         </div>
 
-        {/* ── WIDGET 3: AVISOS Y ALERTAS ── */}
+        {/* ── WIDGET 3: AVISOS Y ALERTAS (clicables) ── */}
         <div className="stat-card" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -279,12 +262,12 @@ export default function Dashboard({ data, setData }) {
           <div style={{ flex: 1, overflowY: 'auto', maxHeight: '280px' }}>
             {alertas.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '32px 16px', color: '#16a34a', fontSize: '13px' }}>
-                ✓ Sin alertas. Todo está en orden.
+                Sin alertas. Todo está en orden.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {alertas.map(a => (
-                  <div key={a.id} style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', borderLeft: `3px solid ${a.color}`, display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                  <div key={a.id} onClick={() => navigate(getAlertRoute(a.id))} style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', borderLeft: `3px solid ${a.color}`, display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer', transition: 'background 0.15s' }} onMouseEnter={e => e.currentTarget.style.background='#f8fafc'} onMouseLeave={e => e.currentTarget.style.background='transparent'}>
                     <AlertTriangle size={14} style={{ color: a.color, flexShrink: 0, marginTop: '2px' }} />
                     <div style={{ fontSize: '12px', color: 'var(--text-main)', lineHeight: '1.4' }}>{a.texto}</div>
                   </div>
@@ -292,6 +275,47 @@ export default function Dashboard({ data, setData }) {
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* ═══ FILA 2: KPIs PRINCIPALES (clicables) ═══ */}
+      <div className="dashboard-grid" style={{ marginBottom: '24px' }}>
+        <div className="stat-card" style={{ padding: '20px', cursor: 'pointer' }} onClick={() => navigate('/obras')}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(37,99,235,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}><Briefcase size={18} /></div>
+            <h3 style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Obras Activas</h3>
+          </div>
+          <div className="stat-value" style={{ fontSize: '32px' }}>{obrasActivas}</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{obras.length} total · {obras.filter(o => o.estado === 'finalizada').length} finalizadas</div>
+        </div>
+
+        <div className="stat-card" style={{ padding: '20px', cursor: 'pointer' }} onClick={() => navigate('/presupuestos')}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(217,119,6,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d97706' }}><FileText size={18} /></div>
+            <h3 style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Presupuestos Pendientes</h3>
+          </div>
+          <div className="stat-value" style={{ fontSize: '32px' }}>{pptosPendientes}</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{pptosAceptados.length} aceptados · {presupuestos.filter(p => p.estado === 'rechazado').length} rechazados</div>
+        </div>
+
+        <div className="stat-card" style={{ padding: '20px', cursor: 'pointer' }} onClick={() => navigate('/facturas')}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: margenPct > 15 ? 'rgba(22,163,74,0.1)' : (margenPct > 0 ? 'rgba(217,119,6,0.1)' : 'rgba(220,38,38,0.1)'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: margenPct > 15 ? '#16a34a' : (margenPct > 0 ? '#d97706' : '#dc2626') }}>
+              {margenGlobal >= 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
+            </div>
+            <h3 style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Margen Neto Global</h3>
+          </div>
+          <div className="stat-value" style={{ fontSize: '28px', color: margenPct > 15 ? '#16a34a' : (margenPct > 0 ? '#d97706' : '#dc2626') }}>{formatCurrency(margenGlobal)}</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{margenPct.toFixed(1)}% rentabilidad</div>
+        </div>
+
+        <div className="stat-card" style={{ padding: '20px', cursor: 'pointer' }} onClick={() => navigate('/clientes')}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(139,92,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8b5cf6' }}><DollarSign size={18} /></div>
+            <h3 style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Clientes</h3>
+          </div>
+          <div className="stat-value" style={{ fontSize: '32px' }}>{clientes.length}</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{clientes.filter(c => obras.some(o => o.clienteId === c.id && o.estado === 'en_curso')).length} con obra en curso</div>
         </div>
       </div>
 
@@ -342,13 +366,17 @@ export default function Dashboard({ data, setData }) {
                 <label>Descripción de la tarea</label>
                 <input type="text" value={newTask.titulo} onChange={e => setNewTask({...newTask, titulo: e.target.value})} placeholder="Ej: Llamar al fontanero de la Obra B" autoFocus />
               </div>
-              <div className="form-group full-width">
+              <div className="form-group half-width">
                 <label>Prioridad</label>
                 <select value={newTask.prioridad} onChange={e => setNewTask({...newTask, prioridad: e.target.value})}>
                   <option value="baja">Baja</option>
                   <option value="media">Media</option>
                   <option value="alta">Alta</option>
                 </select>
+              </div>
+              <div className="form-group half-width">
+                <label>Fecha Vencimiento</label>
+                <input type="date" value={newTask.fechaVencimiento} onChange={e => setNewTask({...newTask, fechaVencimiento: e.target.value})} />
               </div>
             </div>
             <div className="modal-footer">

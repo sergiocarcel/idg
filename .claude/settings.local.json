@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/sergiocarcel/idg log --oneline)",
+      "Bash(python3 -c \"import docx; print\\(''python-docx available''\\)\")",
+      "Bash(python3:*)",
+      "Bash(npm install:*)",
+      "Bash(npx vite:*)",
+      "Bash(textutil -convert txt -stdout /Users/sergiocarcel/idg/IDG_CRM_Especificaciones_v3.docx)",
+      "Bash(grep -r \"semáforo\\\\|traffic.*light\\\\|urgency\" /Users/sergiocarcel/idg/src --include=*.jsx)",
+      "Bash(npm run:*)",
+      "Bash(firebase projects:list)",
+      "Bash(npx firebase:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}

@@ -1,15 +1,42 @@
 import React, { useState } from 'react';
-import { Plus, FolderOpen, AlertTriangle, FileText, DownloadCloud, Trash2, Send, X } from 'lucide-react';
+import { Plus, FolderOpen, AlertTriangle, FileText, DownloadCloud, Trash2, Send, X, PenTool } from 'lucide-react';
 import { saveDoc, deleteDoc } from '../../services/db';
+import { openWhatsApp } from '../../utils/sendUtils';
+import SignatureFlow from '../../components/shared/SignatureFlow.jsx';
 
 export default function RRHH({ data, setData }) {
   const [activeCategory, setActiveCategory] = useState('contratos');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ nombre: '', categoria: 'contratos', fechaVencimiento: '', coste: '' });
+  const [formData, setFormData] = useState({ nombre: '', categoria: 'contratos', subcategoria: '', fechaVencimiento: '', coste: '', archivoUrl: '' });
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [signatureDoc, setSignatureDoc] = useState(null);
 
   const documentos = data?.documentosRRHH || [];
 
   const handleInputChange = (field) => (e) => setFormData({ ...formData, [field]: e.target.value });
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+    if (!cloudName || !uploadPreset) {
+      alert('Configura VITE_CLOUDINARY_CLOUD_NAME y VITE_CLOUDINARY_UPLOAD_PRESET en .env');
+      return;
+    }
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('upload_preset', uploadPreset);
+    try {
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, { method: 'POST', body: fd });
+      const data = await res.json();
+      setFormData(prev => ({ ...prev, archivoUrl: data.secure_url, nombre: prev.nombre || file.name }));
+    } catch (err) {
+      console.error('Upload failed:', err);
+      alert('Error al subir archivo');
+    }
+  };
 
   const handleSave = async () => {
     const newDoc = {
@@ -19,7 +46,7 @@ export default function RRHH({ data, setData }) {
     };
     await saveDoc('documentosRRHH', newDoc.id, newDoc);
     setIsModalOpen(false);
-    setFormData({ nombre: '', categoria: activeCategory, fechaVencimiento: '', coste: '' });
+    setFormData({ nombre: '', categoria: activeCategory, fechaVencimiento: '', coste: '', archivoUrl: '' });
   };
 
   const handleDelete = async (id) => {
@@ -27,12 +54,35 @@ export default function RRHH({ data, setData }) {
     await deleteDoc('documentosRRHH', id);
   };
 
-  const categories = [
+  const defaultCategories = [
     { id: 'contratos', label: 'Contratos Personal', color: '#3b82f6' },
     { id: 'vehiculos', label: 'Vehículos Reales', color: '#10b981' },
     { id: 'seguros', label: 'Seguros RC / Empresa', color: '#8b5cf6' },
     { id: 'licencias', label: 'Licencias y REA', color: '#f59e0b' }
   ];
+  const customCategories = (data?.config?.empresa?.categoriasRRHH || []).map(c => ({ id: c.id, label: c.label, color: c.color || '#64748b' }));
+  const categories = [...defaultCategories, ...customCategories];
+
+  const colorPalette = ['#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#14b8a6'];
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    const id = newCategoryName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const existing = data?.config?.empresa?.categoriasRRHH || [];
+    const color = colorPalette[existing.length % colorPalette.length];
+    const updated = [...existing, { id, label: newCategoryName.trim(), color }];
+    await saveDoc('config', 'empresa', { ...data.config.empresa, categoriasRRHH: updated });
+    setNewCategoryName('');
+    setShowAddCategory(false);
+  };
+
+  const handleDeleteCategory = async (catId) => {
+    if (!window.confirm('¿Eliminar esta carpeta? Los documentos que contenga no se eliminarán.')) return;
+    const existing = data?.config?.empresa?.categoriasRRHH || [];
+    const updated = existing.filter(c => c.id !== catId);
+    await saveDoc('config', 'empresa', { ...data.config.empresa, categoriasRRHH: updated });
+    if (activeCategory === catId) setActiveCategory('todas');
+  };
 
   // Identificar caducidades cercanas (menos de 30 días o caducado)
   const hoy = new Date();
@@ -56,9 +106,14 @@ export default function RRHH({ data, setData }) {
           <h1 className="page-title">IDG Gestión y RRHH</h1>
           <p className="page-subtitle">Documentación legal cruzada, caducidades y recursos productivos.</p>
         </div>
-        <button className="btn-primary" onClick={() => { setFormData({...formData, categoria: activeCategory === 'todas' ? 'contratos' : activeCategory}); setIsModalOpen(true); }}>
-          <Plus size={16} /> Subir Documento
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn-secondary" onClick={() => setShowAddCategory(true)}>
+            <Plus size={14} /> Nueva Carpeta
+          </button>
+          <button className="btn-primary" onClick={() => { setFormData({...formData, categoria: activeCategory === 'todas' ? 'contratos' : activeCategory}); setIsModalOpen(true); }}>
+            <Plus size={16} /> Subir Documento
+          </button>
+        </div>
       </header>
 
       {/* Alertas de Vencimiento Crítico */}
@@ -110,9 +165,14 @@ export default function RRHH({ data, setData }) {
               style={{ background: isActive ? c.color : '#fff', color: isActive ? '#fff' : '#1e293b', border: isActive ? 'none' : '1px solid var(--border)', padding: '20px', borderRadius: '12px', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column', gap: '12px' }}
             >
               <FolderOpen size={24} style={{ color: isActive ? '#fff' : c.color }} />
-              <div>
-                <div style={{ fontWeight: 700 }}>{c.label}</div>
-                <div style={{ fontSize: '12px', opacity: isActive ? 0.9 : 0.6, marginTop: '2px' }}>{count} archivos</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>{c.label}</div>
+                  <div style={{ fontSize: '12px', opacity: isActive ? 0.9 : 0.6, marginTop: '2px' }}>{count} archivos</div>
+                </div>
+                {customCategories.some(cc => cc.id === c.id) && (
+                  <button onClick={(e) => { e.stopPropagation(); handleDeleteCategory(c.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: isActive ? 'rgba(255,255,255,0.7)' : '#94a3b8', padding: '2px' }}><Trash2 size={14} /></button>
+                )}
               </div>
             </button>
           )
@@ -139,7 +199,7 @@ export default function RRHH({ data, setData }) {
               <tr key={d.id}>
                 <td>
                   <div style={{ fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <FileText size={16} className="text-slate-400" /> {d.nombre}
+                    <FileText size={16} className="text-slate-400" /> {d.archivoUrl ? <a href={d.archivoUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--text-main)', textDecoration: 'none' }} onMouseEnter={e => e.target.style.color='#2563eb'} onMouseLeave={e => e.target.style.color='var(--text-main)'}>{d.nombre}</a> : d.nombre}
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', paddingLeft: '22px' }}>Subido el {new Date(d.fechaSubida).toLocaleDateString()}</div>
                 </td>
@@ -156,10 +216,16 @@ export default function RRHH({ data, setData }) {
                 <td style={{ fontWeight: 600 }}>{d.coste ? formatCurrency(d.coste) : '—'}</td>
                 <td>
                   <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                    <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '11px', color: '#16a34a', borderColor: '#bbf7d0', background: '#f0fdf4', display: 'flex', gap: '4px', alignItems: 'center' }}>
-                      <Send size={12} /> WhatsApp
-                    </button>
-                    <button className="icon-btn" title="Descargar PDF (Firebase Storage Mock)"><DownloadCloud size={14} /></button>
+                    {d.archivoUrl && (
+                      <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '11px', color: '#16a34a', borderColor: '#bbf7d0', background: '#f0fdf4', display: 'flex', gap: '4px', alignItems: 'center' }}
+                        onClick={() => openWhatsApp('', `Documento: ${d.nombre}\nDescarga: ${d.archivoUrl}`)}>
+                        <Send size={12} /> WhatsApp
+                      </button>
+                    )}
+                    {d.archivoUrl && (
+                      <button className="icon-btn" title="Enviar para firma" onClick={() => setSignatureDoc(d)} style={{ color: '#8b5cf6' }}><PenTool size={14} /></button>
+                    )}
+                    <button className="icon-btn" title="Descargar" onClick={() => d.archivoUrl ? window.open(d.archivoUrl, '_blank') : alert('Este documento no tiene archivo adjunto.')}><DownloadCloud size={14} /></button>
                     <button className="icon-btn danger" onClick={() => handleDelete(d.id)}><Trash2 size={14} /></button>
                   </div>
                 </td>
@@ -182,11 +248,18 @@ export default function RRHH({ data, setData }) {
                 <label>Nombre identificativo</label>
                 <input type="text" value={formData.nombre} onChange={handleInputChange('nombre')} placeholder="Ej: Contrato Indefinido Miguel, Seguro Furgoneta..." autoFocus />
               </div>
-              <div className="form-group full-width">
-                <label>Carpetas de clasificación</label>
+              <div className="form-group half-width">
+                <label>Carpeta</label>
                 <select value={formData.categoria} onChange={handleInputChange('categoria')}>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
+              </div>
+              <div className="form-group half-width">
+                <label>Subcarpeta (opcional)</label>
+                <input type="text" value={formData.subcategoria} onChange={handleInputChange('subcategoria')} placeholder="Ej: Nóminas 2026, EPIs..." list="subcats-list" />
+                <datalist id="subcats-list">
+                  {[...new Set(documentos.filter(d => d.subcategoria).map(d => d.subcategoria))].map(s => <option key={s} value={s} />)}
+                </datalist>
               </div>
               <div className="form-group half-width">
                 <label>Fecha Límite / Caducidad</label>
@@ -200,8 +273,9 @@ export default function RRHH({ data, setData }) {
               <div className="form-group full-width" style={{ marginTop: '8px' }}>
                 <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', border: '2px dashed #cbd5e1', borderRadius: '8px', cursor: 'pointer', background: '#f8fafc' }}>
                   <DownloadCloud size={24} style={{ color: '#94a3b8', marginBottom: '8px' }} />
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Seleccionar Archivo (PDF, Img)</span>
-                  <input type="file" style={{ display: 'none' }} />
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>{formData.archivoUrl ? 'Archivo subido' : 'Seleccionar Archivo (PDF, Img)'}</span>
+                  {formData.archivoUrl && <span style={{ fontSize: '11px', color: '#16a34a', marginTop: '4px' }}>Listo para guardar</span>}
+                  <input type="file" style={{ display: 'none' }} onChange={handleFileUpload} />
                 </label>
               </div>
             </div>
@@ -213,6 +287,42 @@ export default function RRHH({ data, setData }) {
         </div>
       )}
 
+      {/* Modal Firma */}
+      {signatureDoc && (
+        <SignatureFlow
+          title={`Firmar: ${signatureDoc.nombre}`}
+          description={`Documento RRHH — ${signatureDoc.nombre}`}
+          documentUrl={signatureDoc.archivoUrl}
+          onSign={async (signatureData) => {
+            await saveDoc('documentosRRHH', signatureDoc.id, { ...signatureDoc, firmado: true, firmaData: signatureData, fechaFirma: new Date().toISOString() });
+            setSignatureDoc(null);
+          }}
+          onSendRemote={() => setSignatureDoc(null)}
+          onClose={() => setSignatureDoc(null)}
+        />
+      )}
+
+      {/* Modal Nueva Carpeta */}
+      {showAddCategory && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '360px' }}>
+            <div className="modal-header">
+              <h2>Nueva Carpeta</h2>
+              <button className="icon-btn" onClick={() => setShowAddCategory(false)} style={{ background: 'none' }}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group full-width">
+                <label>Nombre de la carpeta</label>
+                <input type="text" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="Ej: Formaciones, EPIs..." autoFocus />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setShowAddCategory(false)}>Cancelar</button>
+              <button className="btn-primary" onClick={handleAddCategory}>Crear Carpeta</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

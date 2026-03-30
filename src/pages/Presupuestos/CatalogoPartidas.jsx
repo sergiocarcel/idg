@@ -5,14 +5,18 @@ import { saveDoc, deleteDoc } from '../../services/db';
 export default function CatalogoPartidas({ data, onClose }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({ id: '', codigo: '', concepto: '', unidad: 'ud', coste: 0, margen: 0 });
+  const [filterCategoria, setFilterCategoria] = useState('');
+  const [formData, setFormData] = useState({ id: '', codigo: '', concepto: '', unidad: 'ud', coste: 0, margen: 0, categoria: '' });
 
   const partidas = data?.catalogoPartidas || [];
 
-  const filteredPartidas = partidas.filter(p => 
-    p.concepto?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.codigo?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const categorias = [...new Set(partidas.map(p => p.categoria).filter(Boolean))].sort();
+
+  const filteredPartidas = partidas.filter(p => {
+    const matchesSearch = !searchTerm || p.concepto?.toLowerCase().includes(searchTerm.toLowerCase()) || p.codigo?.toLowerCase().includes(searchTerm.toLowerCase()) || p.categoria?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCat = !filterCategoria || p.categoria === filterCategoria;
+    return matchesSearch && matchesCat;
+  });
 
   const formatCurrency = (amount) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount || 0);
 
@@ -22,13 +26,13 @@ export default function CatalogoPartidas({ data, onClose }) {
   };
 
   const handleAddNew = () => {
-    setFormData({ id: 'PART-' + Date.now(), codigo: '', concepto: '', unidad: 'ud', coste: 0, margen: 0 });
+    setFormData({ id: 'PART-' + Date.now(), codigo: '', concepto: '', unidad: 'ud', coste: 0, margen: 0, categoria: filterCategoria || '' });
     setEditingId('new');
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setFormData({ id: '', codigo: '', concepto: '', unidad: 'ud', coste: 0, margen: 0 });
+    setFormData({ id: '', codigo: '', concepto: '', unidad: 'ud', coste: 0, margen: 0, categoria: '' });
   };
 
   const handleSave = async () => {
@@ -78,6 +82,10 @@ export default function CatalogoPartidas({ data, onClose }) {
               style={{ width: '100%', padding: '10px 12px 10px 36px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
             />
           </div>
+          <select value={filterCategoria} onChange={e => setFilterCategoria(e.target.value)} style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', minWidth: '160px' }}>
+            <option value="">Todas las categorías</option>
+            {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           <button className="btn-primary" onClick={handleAddNew} disabled={editingId !== null}>
             <Plus size={16} /> Añadir Nueva Partida
           </button>
@@ -90,7 +98,8 @@ export default function CatalogoPartidas({ data, onClose }) {
             <thead>
               <tr>
                 <th style={{ width: '10%' }}>Código</th>
-                <th style={{ width: '40%' }}>Concepto</th>
+                <th style={{ width: '15%' }}>Categoría</th>
+                <th style={{ width: '30%' }}>Concepto</th>
                 <th style={{ width: '10%' }}>Unidad</th>
                 <th style={{ width: '12%', textAlign: 'right' }}>Coste Real</th>
                 <th style={{ width: '10%', textAlign: 'center' }}>Margen</th>
@@ -102,6 +111,7 @@ export default function CatalogoPartidas({ data, onClose }) {
               {editingId === 'new' && (
                 <tr style={{ background: '#eff6ff' }}>
                   <td><input type="text" placeholder="REF-01" value={formData.codigo} onChange={e => setFormData({...formData, codigo: e.target.value})} style={{ width: '100%', padding: '6px' }} /></td>
+                  <td><input type="text" placeholder="Ej: Albañilería" value={formData.categoria} onChange={e => setFormData({...formData, categoria: e.target.value})} list="cat-list" style={{ width: '100%', padding: '6px' }} /><datalist id="cat-list">{categorias.map(c => <option key={c} value={c} />)}</datalist></td>
                   <td><input type="text" placeholder="Descripción resumida..." value={formData.concepto} onChange={e => setFormData({...formData, concepto: e.target.value})} style={{ width: '100%', padding: '6px' }} /></td>
                   <td>
                     <select value={formData.unidad} onChange={e => setFormData({...formData, unidad: e.target.value})} style={{ width: '100%', padding: '6px' }}>
@@ -139,6 +149,7 @@ export default function CatalogoPartidas({ data, onClose }) {
                   return (
                     <tr key={p.id} style={{ background: '#eff6ff' }}>
                       <td><input type="text" value={formData.codigo} onChange={e => setFormData({...formData, codigo: e.target.value})} style={{ width: '100%', padding: '6px' }} /></td>
+                      <td><input type="text" value={formData.categoria} onChange={e => setFormData({...formData, categoria: e.target.value})} list="cat-list" style={{ width: '100%', padding: '6px' }} /></td>
                       <td><input type="text" value={formData.concepto} onChange={e => setFormData({...formData, concepto: e.target.value})} style={{ width: '100%', padding: '6px' }} /></td>
                       <td>
                         <select value={formData.unidad} onChange={e => setFormData({...formData, unidad: e.target.value})} style={{ width: '100%', padding: '6px' }}>
@@ -173,6 +184,7 @@ export default function CatalogoPartidas({ data, onClose }) {
                 return (
                   <tr key={p.id}>
                     <td style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>{p.codigo || '-'}</td>
+                    <td><span style={{ fontSize: '11px', background: p.categoria ? '#eff6ff' : '#f1f5f9', color: p.categoria ? '#2563eb' : '#94a3b8', padding: '2px 8px', borderRadius: '12px', fontWeight: 500 }}>{p.categoria || 'Sin categoría'}</span></td>
                     <td style={{ fontWeight: 500, color: '#0f172a' }}>{p.concepto}</td>
                     <td style={{ color: '#64748b' }}>{p.unidad}</td>
                     <td style={{ textAlign: 'right', color: '#64748b' }}>{formatCurrency(p.coste)}</td>
@@ -192,7 +204,7 @@ export default function CatalogoPartidas({ data, onClose }) {
               
               {filteredPartidas.length === 0 && editingId !== 'new' && (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
                     No se han encontrado partidas en el catálogo maestro. Añade tu primera tarifa de precios.
                   </td>
                 </tr>

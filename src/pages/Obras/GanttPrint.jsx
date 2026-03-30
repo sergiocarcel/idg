@@ -1,9 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import SignatureCanvas from './SignatureCanvas.jsx';
+import SignatureCanvas from '../../components/shared/SignatureCanvas.jsx';
+import PdfHeader from '../../components/print/PdfHeader.jsx';
 
-export default function GanttPrint({ obra, tasks, onClose }) {
+export default function GanttPrint({ obra, tasks, onClose, empresa }) {
   const [signature, setSignature] = useState(null);
   const totalDays = 30;
+
+  // Group tasks by groupId for multi-segment rendering
+  const groups = [];
+  const seen = new Map();
+  tasks.forEach(task => {
+    const gId = task.groupId || ('G-' + task.id);
+    if (!seen.has(gId)) {
+      seen.set(gId, groups.length);
+      groups.push({ groupId: gId, name: task.name, color: task.color, tasks: [task] });
+    } else {
+      groups[seen.get(gId)].tasks.push(task);
+    }
+  });
 
   return (
     <div className="print-container" style={{ position: 'fixed', inset: 0, background: 'white', zIndex: 9999, overflowY: 'auto' }}>
@@ -21,17 +35,16 @@ export default function GanttPrint({ obra, tasks, onClose }) {
       <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px', color: '#000', fontFamily: 'Arial, sans-serif' }}>
         
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '20px', marginBottom: '20px' }}>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.5px', margin: 0 }}>Innovate Design Group</h1>
-            <div style={{ fontSize: '14px', color: '#555', marginTop: '4px' }}>Cronograma Oficial de Ejecución</div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>ACTA DE PLANIFICACIÓN</h2>
-            <div style={{ fontSize: '14px', marginTop: '4px', fontWeight: 'bold' }}>{obra?.nombre || 'PROYECTO TIPO'}</div>
-            <div style={{ fontSize: '12px', marginTop: '4px' }}>Fecha expedición: {new Date().toLocaleDateString()}</div>
-          </div>
-        </div>
+        <PdfHeader
+          empresa={empresa}
+          rightContent={
+            <>
+              <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>ACTA DE PLANIFICACIÓN</h2>
+              <div style={{ fontSize: '14px', marginTop: '4px', fontWeight: 'bold' }}>{obra?.nombre || 'PROYECTO TIPO'}</div>
+              <div style={{ fontSize: '12px', marginTop: '4px' }}>Fecha expedición: {new Date().toLocaleDateString()}</div>
+            </>
+          }
+        />
 
         {/* Info Extra */}
         <div style={{ marginBottom: '20px', fontSize: '12px', display: 'flex', gap: '40px' }}>
@@ -52,27 +65,30 @@ export default function GanttPrint({ obra, tasks, onClose }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {tasks.map((task, index) => (
-              <div key={task.id} style={{ display: 'flex', borderBottom: index === tasks.length - 1 ? 'none' : '1px solid #ddd', background: index % 2 === 0 ? '#fff' : '#fafafa', position: 'relative' }}>
-                <div style={{ width: '280px', padding: '10px 12px', fontSize: '11px', fontWeight: 'bold', borderRight: '1px solid #000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {index+1}. {task.name.toUpperCase()}
+            {groups.map((group, gIdx) => {
+              const totalDur = group.tasks.reduce((s, t) => s + t.duration, 0);
+              return (
+                <div key={group.groupId} style={{ display: 'flex', borderBottom: gIdx === groups.length - 1 ? 'none' : '1px solid #ddd', background: gIdx % 2 === 0 ? '#fff' : '#fafafa', position: 'relative' }}>
+                  <div style={{ width: '280px', padding: '10px 12px', fontSize: '11px', fontWeight: 'bold', borderRight: '1px solid #000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {gIdx+1}. {group.name.toUpperCase()} {group.tasks.length > 1 ? `(${totalDur}d)` : ''}
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', position: 'relative' }}>
+                    {Array.from({ length: totalDays }).map((_, i) => (
+                      <div key={`bg-${i}`} style={{ flex: 1, borderRight: i === totalDays - 1 ? 'none' : '1px solid #ddd', background: i % 7 === 5 || i % 7 === 6 ? 'rgba(239,68,68,0.05)' : 'transparent' }} />
+                    ))}
+                    {group.tasks.map(task => (
+                      <div key={task.id} style={{
+                        position: 'absolute', top: '6px', bottom: '6px',
+                        left: `${(task.startDay / totalDays) * 100}%`,
+                        width: `${(task.duration / totalDays) * 100}%`,
+                        background: task.color, borderRadius: '4px',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.1)'
+                      }} />
+                    ))}
+                  </div>
                 </div>
-                <div style={{ flex: 1, display: 'flex', position: 'relative' }}>
-                  {/* Grid Lines */}
-                  {Array.from({ length: totalDays }).map((_, i) => (
-                    <div key={`bg-${i}`} style={{ flex: 1, borderRight: i === totalDays - 1 ? 'none' : '1px solid #ddd', background: i % 7 === 5 || i % 7 === 6 ? 'rgba(239,68,68,0.05)' : 'transparent' }} />
-                  ))}
-                  {/* Task Bar */}
-                  <div style={{ 
-                    position: 'absolute', top: '6px', bottom: '6px', 
-                    left: `${(task.startDay / totalDays) * 100}%`, 
-                    width: `${(task.duration / totalDays) * 100}%`,
-                    background: task.color, borderRadius: '4px',
-                    boxShadow: '0 0 0 1px rgba(0,0,0,0.1)'
-                  }} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

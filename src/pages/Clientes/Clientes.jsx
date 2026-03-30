@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
 import { saveDoc, deleteDoc } from '../../services/db';
 
 export default function Clientes({ data, setData }) {
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
   const [editId, setEditId] = useState(null);
@@ -151,7 +153,7 @@ export default function Clientes({ data, setData }) {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {data.obras.filter(o => o.clienteId === selectedClient.id).map(o => (
-                      <div key={o.id} style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', background: '#fff' }}>
+                      <div key={o.id} onClick={() => navigate('/obras')} style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', background: '#fff', cursor: 'pointer', transition: 'border-color 0.15s' }} onMouseEnter={e => e.currentTarget.style.borderColor='#3b82f6'} onMouseLeave={e => e.currentTarget.style.borderColor='var(--border)'}>
                         <div style={{ fontWeight: 600, color: '#0f172a' }}>{o.nombre}</div>
                         <div style={{ color: '#64748b', marginTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
                           <span>{new Date(o.fechaCreacion || Date.now()).toLocaleDateString()}</span>
@@ -178,7 +180,7 @@ export default function Clientes({ data, setData }) {
                     {data.presupuestos.filter(p => p.clienteId === selectedClient.id).map(p => {
                       const total = p.capitulos?.reduce((sum, cap) => sum + cap.partidas.reduce((s, pt) => s + (pt.cantidad * pt.precioVenta), 0), 0) || 0;
                       return (
-                        <div key={p.id} style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div key={p.id} onClick={() => navigate('/presupuestos')} style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'border-color 0.15s' }} onMouseEnter={e => e.currentTarget.style.borderColor='#d97706'} onMouseLeave={e => e.currentTarget.style.borderColor='var(--border)'}>
                           <div>
                             <div style={{ fontWeight: 600, color: '#0f172a' }}>{p.id}</div>
                             <div style={{ color: '#64748b', marginTop: '2px' }}>{new Date(p.fecha).toLocaleDateString()}</div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, X, ShoppingCart, Clock, CheckCircle, AlertCircle, PackageCheck } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, ShoppingCart, Clock, CheckCircle, AlertCircle, PackageCheck, Paperclip, Loader2 } from 'lucide-react';
 import { saveDoc, deleteDoc, updateDoc } from '../../services/db';
 
 export default function Pedidos({ data, setData }) {
@@ -7,9 +7,10 @@ export default function Pedidos({ data, setData }) {
   const [selectedPedido, setSelectedPedido] = useState(null);
   
   const initialForm = {
-    material: '', cantidad: '', obraId: '', fechaNecesidad: '', asignadoA: '', estado: 'pendiente', notas: ''
+    material: '', cantidad: '', obraId: '', fechaNecesidad: '', asignadoA: '', estado: 'pendiente', notas: '', albaranUrl: ''
   };
   const [formData, setFormData] = useState(initialForm);
+  const [isUploading, setIsUploading] = useState(false);
 
   const pedidos = data?.pedidos || [];
   const obras = data?.obras || [];
@@ -26,6 +27,27 @@ export default function Pedidos({ data, setData }) {
     await saveDoc('pedidos', docId, docData);
     setIsModalOpen(false);
     setSelectedPedido(null);
+  };
+
+  const handleAlbaranUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+      const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('upload_preset', uploadPreset);
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, { method: 'POST', body: fd });
+      const result = await res.json();
+      if (result.error) throw new Error(result.error.message);
+      setFormData(prev => ({ ...prev, albaranUrl: result.secure_url }));
+    } catch (err) {
+      console.error('Error subiendo albarán:', err);
+      alert('Error subiendo el archivo. Comprueba la configuración de Cloudinary.');
+    }
+    setIsUploading(false);
   };
 
   const handleDelete = async (id) => {
@@ -98,12 +120,13 @@ export default function Pedidos({ data, setData }) {
               <th>Fecha Límite</th>
               <th>Responsable</th>
               <th>Estado</th>
+              <th style={{ textAlign: 'center' }}>Albarán</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {pedidos.length === 0 && (
-              <tr><td colSpan="6" style={{textAlign:'center', padding:'32px', color:'#94a3b8'}}>No hay solicitudes de material activas</td></tr>
+              <tr><td colSpan="7" style={{textAlign:'center', padding:'32px', color:'#94a3b8'}}>No hay solicitudes de material activas</td></tr>
             )}
             {pedidos.map(p => (
               <tr key={p.id}>
@@ -117,6 +140,13 @@ export default function Pedidos({ data, setData }) {
                 </td>
                 <td style={{ fontSize: '13px' }}>{p.asignadoA || '—'}</td>
                 <td>{estadoBadge(p.estado)}</td>
+                <td style={{ textAlign: 'center' }}>
+                  {p.albaranUrl ? (
+                    <a href={p.albaranUrl} target="_blank" rel="noopener noreferrer" title="Ver albarán adjunto" style={{ color: '#3b82f6' }}><Paperclip size={14} /></a>
+                  ) : (
+                    <span style={{ color: '#cbd5e1' }}>—</span>
+                  )}
+                </td>
                 <td>
                   <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
                     {p.estado === 'pendiente' && (
@@ -179,6 +209,18 @@ export default function Pedidos({ data, setData }) {
               <div className="form-group full-width">
                 <label>Notas / Urgencia</label>
                 <textarea value={formData.notas} onChange={handleInputChange('notas')} rows="2" placeholder="Información extra o motivo..." />
+              </div>
+              <div className="form-group full-width">
+                <label>Adjuntar Albarán / Factura (PDF o imagen)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: '#f1f5f9', border: '1px dashed #cbd5e1', borderRadius: '8px', cursor: isUploading ? 'not-allowed' : 'pointer', fontSize: '12px', color: '#64748b' }}>
+                    <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} onChange={handleAlbaranUpload} disabled={isUploading} />
+                    {isUploading ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Subiendo...</> : <><Paperclip size={14} /> Seleccionar archivo</>}
+                  </label>
+                  {formData.albaranUrl && (
+                    <a href={formData.albaranUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 600 }}>Ver adjunto</a>
+                  )}
+                </div>
               </div>
             </div>
             <div className="modal-footer">

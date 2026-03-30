@@ -13,6 +13,7 @@ import RRHH from './pages/RRHH/RRHH.jsx';
 import Configuracion from './pages/Configuracion/Configuracion.jsx';
 import Proveedores from './pages/Proveedores/Proveedores.jsx';
 import Calendario from './pages/Calendario/Calendario.jsx';
+import Planificacion from './pages/Planificacion/Planificacion.jsx';
 import Login from './pages/Auth/Login.jsx';
 
 import { listenToCollection, seedDatabaseIfNeeded } from './services/db';
@@ -20,9 +21,10 @@ import { auth } from './config/firebase';
 
 function App() {
   const [appData, setAppData] = useState({
-    clientes: [], obras: [], presupuestos: [], pedidos: [], materiales: [], 
-    proveedores: [], trabajadores: [], registroHoras: [], documentosRRHH: [], 
-    facturas: [], catalogoPartidas: [], tareasDashboard: [], config: { empresa: null, usuarios: [] }
+    clientes: [], obras: [], presupuestos: [], pedidos: [], materiales: [],
+    proveedores: [], trabajadores: [], registroHoras: [], documentosRRHH: [],
+    facturas: [], catalogoPartidas: [], tareasDashboard: [], notificaciones: [],
+    eventos: [], planificacion: [], config: { empresa: null, usuarios: [] }
   });
 
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,7 @@ function App() {
       await seedDatabaseIfNeeded();
       
       const unsubs = [];
-      const cols = ['clientes', 'obras', 'presupuestos', 'pedidos', 'materiales', 'proveedores', 'trabajadores', 'registroHoras', 'documentosRRHH', 'facturas', 'catalogoPartidas', 'tareasDashboard'];
+      const cols = ['clientes', 'obras', 'presupuestos', 'pedidos', 'materiales', 'proveedores', 'trabajadores', 'registroHoras', 'documentosRRHH', 'facturas', 'catalogoPartidas', 'tareasDashboard', 'notificaciones', 'eventos', 'planificacion'];
       
       cols.forEach(col => {
         const unsub = listenToCollection(col, (data) => {
@@ -87,15 +89,17 @@ function App() {
   const currentUserConfig = appData.config?.usuarios?.find(u => u.email === user.email);
   const userRole = currentUserConfig?.rol || 'trabajador';
   const userName = currentUserConfig?.nombre || 'Usuario CRM';
+  // T16/T17: Check if user is an external collaborator (email in obra.compartidoCon but not in config.usuarios)
+  const isColaboradorExterno = !currentUserConfig && (appData.obras || []).some(o => (o.compartidoCon || []).some(c => c.email === user.email));
 
   return (
     <BrowserRouter>
-      <Layout userRole={userRole} userName={userName}>
+      <Layout userRole={userRole} userName={userName} notificaciones={appData.notificaciones}>
         <Routes>
           <Route path="/" element={<Dashboard data={appData} setData={setAppData} />} />
           <Route path="/clientes" element={<Clientes data={appData} setData={setAppData} />} />
           <Route path="/obras" element={<Obras data={appData} setData={setAppData} />} />
-          <Route path="/presupuestos" element={<Presupuestos data={appData} setData={setAppData} />} />
+          <Route path="/presupuestos" element={<Presupuestos data={appData} setData={setAppData} forceMode={isColaboradorExterno ? 'colaboradores' : null} />} />
           <Route path="/facturas" element={<Facturas data={appData} setData={setAppData} />} />
           <Route path="/pedidos" element={<Pedidos data={appData} setData={setAppData} />} />
           <Route path="/materiales" element={<Almacen data={appData} setData={setAppData} />} />
@@ -104,6 +108,7 @@ function App() {
           <Route path="/idg" element={<RRHH data={appData} setData={setAppData} />} />
           <Route path="/config" element={<Configuracion data={appData} setData={setAppData} />} />
           <Route path="/calendario" element={<Calendario data={appData} setData={setAppData} />} />
+          <Route path="/planificacion" element={<Planificacion data={appData} setData={setAppData} />} />
         </Routes>
       </Layout>
     </BrowserRouter>

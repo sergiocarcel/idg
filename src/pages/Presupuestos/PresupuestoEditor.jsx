@@ -149,8 +149,8 @@ export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
                         <th style={{ textAlign: 'left', paddingBottom: '8px', color: 'var(--text-muted)' }}>Concepto / Descripción</th>
                         <th style={{ width: '60px', textAlign: 'center', paddingBottom: '8px', color: 'var(--text-muted)' }}>Unid</th>
                         <th style={{ width: '70px', textAlign: 'center', paddingBottom: '8px', color: 'var(--text-muted)' }}>Cant</th>
-                        <th style={{ width: '90px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Coste Un.</th>
-                        <th style={{ width: '90px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Venta Un.</th>
+                        <th style={{ width: '90px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Precio Coste</th>
+                        <th style={{ width: '90px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Precio Venta</th>
                         <th style={{ width: '100px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Total</th>
                         <th style={{ width: '40px' }}></th>
                       </tr>

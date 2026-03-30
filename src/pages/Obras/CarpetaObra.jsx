@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Upload, File as FileIcon, Image as ImageIcon, Trash2, DownloadCloud, Loader2 } from 'lucide-react';
+import { X, Upload, File as FileIcon, Image as ImageIcon, Trash2, DownloadCloud, Loader2, FileText, CheckCircle2 } from 'lucide-react';
 import { updateDoc } from '../../services/db';
 
 export default function CarpetaObra({ obra, data, setData, onClose }) {
@@ -9,10 +9,13 @@ export default function CarpetaObra({ obra, data, setData, onClose }) {
   const [activeTab, setActiveTab] = useState('documentos');
 
   const timelineFiles = files.filter(f => f.type === 'image' || f.type === 'video');
-  const groupedTimeline = timelineFiles.reduce((acc, file) => {
-    const d = new Date(file.date).toLocaleDateString();
+  // Merge actas into timeline
+  const actas = (obra.actas || []).map(a => ({ ...a, _isActa: true, date: a.fecha || a.date }));
+  const allTimelineItems = [...timelineFiles, ...actas];
+  const groupedTimeline = allTimelineItems.reduce((acc, item) => {
+    const d = new Date(item.date).toLocaleDateString();
     if (!acc[d]) acc[d] = [];
-    acc[d].push(file);
+    acc[d].push(item);
     return acc;
   }, {});
 
@@ -193,7 +196,7 @@ export default function CarpetaObra({ obra, data, setData, onClose }) {
           {activeTab === 'timeline' && (
             Object.keys(groupedTimeline).length === 0 ? (
               <div style={{ textAlign: 'center', color: '#94a3b8', padding: '40px 0', fontSize: '14px' }}>
-                No hay fotos ni vídeos subidos a esta obra todavía. Sube los recursos en la pestaña 'Documentos' para que se ordenen solos aquí.
+                No hay fotos, vídeos ni actas registradas en esta obra todavía.
               </div>
             ) : (
               <div style={{ position: 'relative', paddingLeft: '20px' }}>
@@ -205,18 +208,40 @@ export default function CarpetaObra({ obra, data, setData, onClose }) {
                     <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '16px', marginTop: '-2px' }}>{date}</h3>
                     
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
-                      {groupedTimeline[date].map(file => (
-                        <div key={file.id} style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
-                          {file.type === 'video' ? (
-                            <video src={file.url} style={{ width: '100%', height: '140px', objectFit: 'cover' }} controls />
+                      {groupedTimeline[date].map(item => item._isActa ? (
+                        <div key={`acta-${item.id || item.fecha}`} style={{ background: '#fff', border: '1px solid #c4b5fd', borderRadius: '8px', overflow: 'hidden', borderLeft: '3px solid #8b5cf6' }}>
+                          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <FileText size={14} style={{ color: '#8b5cf6' }} />
+                              <span style={{ fontSize: '11px', fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase' }}>Acta Modificación</span>
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-main)', fontWeight: 500 }}>{item.descripcion || 'Sin descripción'}</div>
+                            {(item.impactoDias || item.impactoCoste) && (
+                              <div style={{ fontSize: '10px', color: '#64748b' }}>
+                                {item.impactoDias && <span>+{item.impactoDias} días</span>}
+                                {item.impactoDias && item.impactoCoste && <span> · </span>}
+                                {item.impactoCoste && <span>+{item.impactoCoste}€</span>}
+                              </div>
+                            )}
+                            {item.firmada && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#16a34a', fontWeight: 600 }}>
+                                <CheckCircle2 size={12} /> FIRMADA
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div key={item.id} style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+                          {item.type === 'video' ? (
+                            <video src={item.url} style={{ width: '100%', height: '140px', objectFit: 'cover' }} controls />
                           ) : (
-                            <a href={file.url} target="_blank" rel="noopener noreferrer">
-                               <img src={file.url} alt={file.name} style={{ width: '100%', height: '140px', objectFit: 'cover', cursor: 'zoom-in' }} />
+                            <a href={item.url} target="_blank" rel="noopener noreferrer">
+                               <img src={item.url} alt={item.name} style={{ width: '100%', height: '140px', objectFit: 'cover', cursor: 'zoom-in' }} />
                             </a>
                           )}
                           <div style={{ padding: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{new Date(file.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                            <button onClick={() => handleRemoveFile(file)} style={{ padding: '2px', background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={12} /></button>
+                            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{new Date(item.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            <button onClick={() => handleRemoveFile(item)} style={{ padding: '2px', background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={12} /></button>
                           </div>
                         </div>
                       ))}

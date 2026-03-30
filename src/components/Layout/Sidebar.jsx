@@ -1,8 +1,8 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { 
-  Home, Users, Briefcase, FileText, FileBarChart, Package, 
-  Truck, ClipboardList, Calendar, User, Settings, FolderKanban, LogOut, ShoppingCart, X 
+import {
+  Home, Users, Briefcase, FileText, FileBarChart, Package,
+  Truck, ClipboardList, Calendar, User, Settings, FolderKanban, LogOut, ShoppingCart, X, LayoutGrid
 } from 'lucide-react';
 import { auth } from '../../config/firebase';
 
@@ -12,6 +12,7 @@ const menuItems = [
   { k: "obras", l: "Obras", i: Briefcase },
   { k: "presupuestos", l: "Presupuestos", i: FileText },
   { k: "facturas", l: "Facturación", i: FileBarChart },
+  { k: "planificacion", l: "Planificación", i: LayoutGrid },
   { k: "pedidos", l: "Pedidos", i: ShoppingCart },
   { k: "materiales", l: "Almacén", i: Package },
   { k: "proveedores", l: "Proveedores", i: Truck },
@@ -23,8 +24,8 @@ const menuItems = [
 
 export default function Sidebar({ userRole = 'trabajador', userName = 'Usuario', onClose }) {
   const roleAccess = {
-    admin: ['dashboard', 'clientes', 'obras', 'presupuestos', 'facturas', 'pedidos', 'materiales', 'proveedores', 'calendario', 'trabajadores', 'idg', 'config'],
-    jefe: ['dashboard', 'clientes', 'obras', 'presupuestos', 'pedidos', 'materiales', 'calendario', 'trabajadores'],
+    admin: ['dashboard', 'clientes', 'obras', 'presupuestos', 'facturas', 'planificacion', 'pedidos', 'materiales', 'proveedores', 'calendario', 'trabajadores', 'idg', 'config'],
+    jefe: ['dashboard', 'clientes', 'obras', 'presupuestos', 'planificacion', 'pedidos', 'materiales', 'calendario', 'trabajadores'],
     logistica: ['dashboard', 'pedidos', 'materiales', 'proveedores'],
     trabajador: ['dashboard', 'pedidos', 'trabajadores']
   };
@@ -33,7 +34,7 @@ export default function Sidebar({ userRole = 'trabajador', userName = 'Usuario',
 
   const groups = [
     { title: 'GESTIÓN', keys: ['dashboard', 'clientes', 'obras', 'presupuestos', 'facturas'] },
-    { title: 'OPERACIONES', keys: ['pedidos', 'materiales', 'proveedores', 'calendario'] },
+    { title: 'OPERACIONES', keys: ['planificacion', 'pedidos', 'materiales', 'proveedores', 'calendario'] },
     { title: 'SISTEMA', keys: ['trabajadores', 'idg', 'config'] }
   ];
 

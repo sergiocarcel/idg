@@ -139,7 +139,7 @@ export default function Almacen({ data, setData }) {
               {filteredMateriales.map(m => (
                 <tr key={m.id}>
                   <td>
-                    <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '13px' }}>{m.nombre}</div>
+                    <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '250px' }} title={m.nombre}>{m.nombre}</div>
                     <div style={{ fontSize: '12px', color: '#2563eb', fontWeight: 500, marginTop: '2px' }}>{m.cantidad}</div>
                   </td>
                   {filterObra === 'todas' && (

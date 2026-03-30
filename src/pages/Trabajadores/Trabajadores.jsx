@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Plus, Clock, Briefcase, Calendar as CalIcon, User, Search, MapPin, UserPlus, Edit2, Trash2, X } from 'lucide-react';
 import { saveDoc, deleteDoc } from '../../services/db';
+import PlanificacionTrabajadores from './PlanificacionTrabajadores.jsx';
 
 export default function Trabajadores({ data, setData }) {
   const [activeTab, setActiveTab] = useState('directorio'); // 'directorio', 'horas' o 'planificacion'
   const [filterText, setFilterText] = useState('');
+  const [horasForm, setHorasForm] = useState({ trabajador: '', fecha: new Date().toISOString().split('T')[0], horas: '', concepto: '', obraId: '' });
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ nombre: '', rol: '', telefono: '', dni: '' });
+  const [formData, setFormData] = useState({ nombre: '', apellidos: '', rol: '', telefono: '', dni: '', comentarios: '' });
   const [editingId, setEditingId] = useState(null);
 
   const trabajadores = data?.trabajadores || [];
@@ -56,7 +58,7 @@ export default function Trabajadores({ data, setData }) {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '16px', margin: 0 }}>Plantilla ({trabajadores.length})</h3>
-            <button className="btn-primary" onClick={() => { setFormData({ nombre: '', rol: '', telefono: '', dni: '' }); setEditingId(null); setIsModalOpen(true); }}>
+            <button className="btn-primary" onClick={() => { setFormData({ nombre: '', apellidos: '', rol: '', telefono: '', dni: '', comentarios: '' }); setEditingId(null); setIsModalOpen(true); }}>
               <UserPlus size={16} /> Añadir Trabajador
             </button>
           </div>
@@ -67,8 +69,9 @@ export default function Trabajadores({ data, setData }) {
                   {t.nombre?.charAt(0) || 'U'}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '15px' }}>{t.nombre}</div>
+                  <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '15px' }}>{t.nombre} {t.apellidos || ''}</div>
                   <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px' }}>{t.rol || 'Operario'}</div>
+                  {t.comentarios && <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', fontStyle: 'italic' }}>{t.comentarios}</div>}
                   {(t.telefono || t.dni) && (
                     <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                       {t.telefono && (
@@ -153,60 +156,72 @@ export default function Trabajadores({ data, setData }) {
             </table>
           </div>
 
-          <div className="stat-card" style={{ padding: '24px', alignSelf: 'start' }}>
-            <h3 style={{ fontSize: '14px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Plus size={16} className="text-blue-500" /> Nuevo Registro
-            </h3>
-            <div className="form-group full-width" style={{ marginBottom: '12px' }}>
-              <label>Trabajador</label>
-              <select>
-                <option value="">Selecciona trabajador...</option>
-                {trabajadores.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
-              </select>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignSelf: 'start' }}>
+            {/* Resumen por trabajador */}
+            <div className="stat-card" style={{ padding: '16px' }}>
+              <h3 style={{ fontSize: '13px', marginBottom: '12px', fontWeight: 700, color: 'var(--text-main)' }}>Resumen Horas Extra</h3>
+              {(() => {
+                const resumen = {};
+                registroHoras.forEach(h => {
+                  if (!resumen[h.trabajador]) resumen[h.trabajador] = 0;
+                  resumen[h.trabajador] += Number(h.horas) || 0;
+                });
+                const entries = Object.entries(resumen).sort((a, b) => b[1] - a[1]);
+                return entries.length === 0 ? (
+                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>Sin registros.</div>
+                ) : entries.map(([nombre, total]) => (
+                  <div key={nombre} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: '12px' }}>
+                    <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>{nombre}</span>
+                    <span style={{ fontWeight: 700, color: '#2563eb' }}>{total} h</span>
+                  </div>
+                ));
+              })()}
             </div>
-            <div className="form-group full-width" style={{ marginBottom: '12px' }}>
-              <label>Fecha</label>
-              <input type="date" defaultValue={new Date().toISOString().split('T')[0]} />
+
+            {/* Formulario nuevo registro */}
+            <div className="stat-card" style={{ padding: '24px' }}>
+              <h3 style={{ fontSize: '14px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Plus size={16} className="text-blue-500" /> Nuevo Registro
+              </h3>
+              <div className="form-group full-width" style={{ marginBottom: '12px' }}>
+                <label>Trabajador</label>
+                <select value={horasForm.trabajador} onChange={e => setHorasForm({...horasForm, trabajador: e.target.value})}>
+                  <option value="">Selecciona trabajador...</option>
+                  {trabajadores.map(t => <option key={t.id} value={t.nombre}>{t.nombre} {t.apellidos || ''}</option>)}
+                </select>
+              </div>
+              <div className="form-group full-width" style={{ marginBottom: '12px' }}>
+                <label>Fecha</label>
+                <input type="date" value={horasForm.fecha} onChange={e => setHorasForm({...horasForm, fecha: e.target.value})} />
+              </div>
+              <div className="form-group full-width" style={{ marginBottom: '12px' }}>
+                <label>Cant. Horas (Extra)</label>
+                <input type="number" step="0.5" placeholder="Ej: 2.5" value={horasForm.horas} onChange={e => setHorasForm({...horasForm, horas: e.target.value})} />
+              </div>
+              <div className="form-group full-width" style={{ marginBottom: '12px' }}>
+                <label>Concepto</label>
+                <input type="text" placeholder="Ej: Descarga material fuera de hora" value={horasForm.concepto} onChange={e => setHorasForm({...horasForm, concepto: e.target.value})} />
+              </div>
+              <div className="form-group full-width" style={{ marginBottom: '24px' }}>
+                <label>Asociar a Obra (Opcional)</label>
+                <select value={horasForm.obraId} onChange={e => setHorasForm({...horasForm, obraId: e.target.value})}>
+                  <option value="">Sin obra específica</option>
+                  {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+                </select>
+              </div>
+              <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={async () => {
+                if (!horasForm.trabajador || !horasForm.horas) return alert('Selecciona trabajador y horas');
+                const id = 'HR-' + Date.now();
+                await saveDoc('registroHoras', id, { ...horasForm, id, horas: Number(horasForm.horas), aprobado: false });
+                setHorasForm({ trabajador: '', fecha: new Date().toISOString().split('T')[0], horas: '', concepto: '', obraId: '' });
+              }}>Registrar Horas</button>
             </div>
-            <div className="form-group full-width" style={{ marginBottom: '12px' }}>
-              <label>Cant. Horas (Extra)</label>
-              <input type="number" step="0.5" placeholder="Ej: 2.5" />
-            </div>
-            <div className="form-group full-width" style={{ marginBottom: '12px' }}>
-              <label>Concepto</label>
-              <input type="text" placeholder="Ej: Descarga material fuera de hora" />
-            </div>
-            <div className="form-group full-width" style={{ marginBottom: '24px' }}>
-              <label>Asociar a Obra (Opcional)</label>
-              <select>
-                <option value="">Sin obra específica</option>
-                {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
-              </select>
-            </div>
-            <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Registrar Horas</button>
           </div>
         </div>
       )}
 
       {activeTab === 'planificacion' && (
-        <div className="stat-card" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-            <h3 style={{ fontSize: '16px', margin: 0 }}>Planificador de Tareas por Obra (UI en progreso)</h3>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="btn-secondary">Semana Anterior</button>
-              <button className="btn-primary">Esta Semana</button>
-              <button className="btn-secondary">Próxima Semana</button>
-            </div>
-          </div>
-          
-          <div style={{ padding: '40px 0', textAlign: 'center', background: '#f8fafc', borderRadius: '12px', border: '1px dashed var(--border)' }}>
-            <Briefcase size={32} style={{ color: '#94a3b8', margin: '0 auto 12px' }} />
-            <div style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px' }}>Módulo de Gantt de Personal en construcción.</div>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '400px', margin: '0 auto' }}>
-              Aquí se montará visualmente un cuadrante mostrando a qué obras está asignado cada electricista, fontanero o albañil por días de la semana según los requerimientos solicitados.
-            </p>
-          </div>
-        </div>
+        <PlanificacionTrabajadores data={data} />
       )}
 
       {isModalOpen && (
@@ -217,9 +232,13 @@ export default function Trabajadores({ data, setData }) {
               <button className="icon-btn" onClick={() => setIsModalOpen(false)} style={{background: 'none'}}><X size={18} /></button>
             </div>
             <div className="modal-body form-grid">
-              <div className="form-group full-width">
-                <label>Nombre y Apellidos</label>
+              <div className="form-group half-width">
+                <label>Nombre</label>
                 <input type="text" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} autoFocus />
+              </div>
+              <div className="form-group half-width">
+                <label>Apellidos</label>
+                <input type="text" value={formData.apellidos || ''} onChange={e => setFormData({...formData, apellidos: e.target.value})} />
               </div>
               <div className="form-group full-width">
                 <label>Rol / Cargo (Ej: Oficial 1ª, Jefe de Obra)</label>
@@ -232,6 +251,10 @@ export default function Trabajadores({ data, setData }) {
               <div className="form-group half-width">
                 <label>DNI / NIE</label>
                 <input type="text" value={formData.dni || ''} onChange={e => setFormData({...formData, dni: e.target.value})} />
+              </div>
+              <div className="form-group full-width">
+                <label>Comentarios</label>
+                <textarea rows={3} value={formData.comentarios || ''} onChange={e => setFormData({...formData, comentarios: e.target.value})} placeholder="Notas internas sobre el trabajador..." style={{ resize: 'vertical' }} />
               </div>
             </div>
             <div className="modal-footer">
