@@ -149,8 +149,7 @@ export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
                         <th style={{ textAlign: 'left', paddingBottom: '8px', color: 'var(--text-muted)' }}>Concepto / Descripción</th>
                         <th style={{ width: '60px', textAlign: 'center', paddingBottom: '8px', color: 'var(--text-muted)' }}>Unid</th>
                         <th style={{ width: '70px', textAlign: 'center', paddingBottom: '8px', color: 'var(--text-muted)' }}>Cant</th>
-                        <th style={{ width: '90px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Precio Coste</th>
-                        <th style={{ width: '90px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Precio Venta</th>
+                        <th style={{ width: '90px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Precio</th>
                         <th style={{ width: '100px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Total</th>
                         <th style={{ width: '40px' }}></th>
                       </tr>
@@ -205,17 +204,10 @@ export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
                             />
                           </td>
                           <td style={{ padding: '6px 8px' }}>
-                            <input 
-                              type="number" value={partida.precioCoste} 
-                              onChange={(e) => updatePartida(capIdx, partIdx, 'precioCoste', e.target.value)}
-                              style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'right' }}
-                            />
-                          </td>
-                          <td style={{ padding: '6px 8px' }}>
-                            <input 
-                              type="number" value={partida.precioVenta} 
+                            <input
+                              type="number" value={partida.precioVenta}
                               onChange={(e) => updatePartida(capIdx, partIdx, 'precioVenta', e.target.value)}
-                              style={{ width: '100%', padding: '6px', border: '1px solid border', borderRadius: '6px', textAlign: 'right', background: '#f0fdf4', borderColor: '#bbf7d0' }}
+                              style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'right' }}
                             />
                           </td>
                           <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 600 }}>

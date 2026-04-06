@@ -89,6 +89,13 @@ export default function CarpetaColaboradores({ obra, onClose }) {
           <button className="btn-primary" onClick={() => setShowAddForm(true)} style={{ fontSize: '12px' }}><Plus size={14} /> Añadir Colaborador</button>
         </div>
 
+        {obra.notas && (
+          <div style={{ margin: '16px 24px 0', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '14px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#92400e', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Notas internas de la obra</div>
+            <p style={{ fontSize: '13px', color: '#78350f', margin: 0, whiteSpace: 'pre-wrap' }}>{obra.notas}</p>
+          </div>
+        )}
+
         {showShareForm && (
           <div style={{ padding: '14px 24px', background: '#fefce8', borderBottom: '1px solid #fde68a' }}>
             <div style={{ fontSize: '11px', fontWeight: 600, color: '#92400e', marginBottom: '8px' }}>Acceso externo (sin precios) — Los emails compartidos podrán ver esta obra en modo colaborador</div>

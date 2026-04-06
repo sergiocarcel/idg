@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Plus, Clock, Briefcase, Calendar as CalIcon, User, Search, MapPin, UserPlus, Edit2, Trash2, X } from 'lucide-react';
+import { Plus, Clock, User, Search, UserPlus, Edit2, Trash2, X } from 'lucide-react';
 import { saveDoc, deleteDoc } from '../../services/db';
-import PlanificacionTrabajadores from './PlanificacionTrabajadores.jsx';
 
 export default function Trabajadores({ data, setData }) {
-  const [activeTab, setActiveTab] = useState('directorio'); // 'directorio', 'horas' o 'planificacion'
+  const [activeTab, setActiveTab] = useState('directorio'); // 'directorio' | 'horas'
   const [filterText, setFilterText] = useState('');
   const [horasForm, setHorasForm] = useState({ trabajador: '', fecha: new Date().toISOString().split('T')[0], horas: '', concepto: '', obraId: '' });
   
@@ -45,12 +44,6 @@ export default function Trabajadores({ data, setData }) {
           style={{ padding: '0 0 12px 0', background: 'none', border: 'none', borderBottom: activeTab === 'horas' ? '2px solid var(--accent)' : '2px solid transparent', color: activeTab === 'horas' ? 'var(--text-main)' : 'var(--text-muted)', fontWeight: activeTab === 'horas' ? 600 : 500, cursor: 'pointer', transition: 'all 0.2s', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}
         >
           <Clock size={16} /> Horas Extras y Partes
-        </button>
-        <button 
-          onClick={() => setActiveTab('planificacion')}
-          style={{ padding: '0 0 12px 0', background: 'none', border: 'none', borderBottom: activeTab === 'planificacion' ? '2px solid var(--accent)' : '2px solid transparent', color: activeTab === 'planificacion' ? 'var(--text-main)' : 'var(--text-muted)', fontWeight: activeTab === 'planificacion' ? 600 : 500, cursor: 'pointer', transition: 'all 0.2s', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}
-        >
-          <CalIcon size={16} /> Planificación por Obras
         </button>
       </div>
 
@@ -220,9 +213,6 @@ export default function Trabajadores({ data, setData }) {
         </div>
       )}
 
-      {activeTab === 'planificacion' && (
-        <PlanificacionTrabajadores data={data} />
-      )}
 
       {isModalOpen && (
         <div className="modal-overlay">

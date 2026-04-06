@@ -25,9 +25,11 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
   
   const formatCurrency = (val) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(val);
 
-  const showPrice = mode !== 'colaboradores';
-  const showTotal = mode !== 'colaboradores';
-  const priceField = mode === 'direccion' ? 'precioCoste' : 'precioVenta';
+  // direccion: todas las columnas (Precio + Total), sin IVA
+  // cliente: sin columna Precio, solo Total, con IVA
+  const showPrice = mode === 'direccion';
+  const showTotal = true;
+  const priceField = 'precioVenta';
 
   const calculateTotal = () => {
     return ppto.capitulos.reduce((sum, cap) => {
@@ -48,8 +50,8 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
           empresa={data?.config?.empresa}
           rightContent={
             <>
-              <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0, color: mode === 'direccion' ? '#dc2626' : (mode === 'colaboradores' ? '#8b5cf6' : '#2563eb') }}>
-                PRESUPUESTO {mode === 'direccion' ? '(DIRECCIÓN)' : (mode === 'colaboradores' ? '(COLABORADORES)' : '')}
+              <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0, color: mode === 'direccion' ? '#dc2626' : '#2563eb' }}>
+                PRESUPUESTO {mode === 'direccion' ? '(DIRECCIÓN INTERNO)' : ''}
               </h2>
               <div style={{ fontSize: '12px', marginTop: '4px', fontWeight: 'bold' }}>Nº {ppto.id}</div>
               <div style={{ fontSize: '12px', marginTop: '4px' }}>Fecha: {new Date(ppto.fecha).toLocaleDateString()}</div>

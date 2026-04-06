@@ -223,7 +223,7 @@ export default function Presupuestos({ data, setData, forceMode }) {
                               {/* PDF Dirección */}
                               <button onClick={() => { setPrintMode('direccion'); setPrintPpto(ppto); setOpenMenu(null); }}
                                 style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626', textAlign: 'left' }}>
-                                <Printer size={13} /> PDF Dirección (Coste)
+                                <Printer size={13} /> PDF Dirección (Interno)
                               </button>
                               <div style={{ height: '1px', background: '#f1f5f9', margin: '4px 0' }} />
                               {/* WhatsApp */}
