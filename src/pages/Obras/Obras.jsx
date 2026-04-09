@@ -42,7 +42,8 @@ export default function Obras({ data, setData }) {
 
     // Si se acaba de vincular un presupuesto (nuevo o cambiado), generar PDF dirección
     if (formData.presupuestoId) {
-      const previousPresupuestoId = editId ? obras.find(o => o.id === editId)?.presupuestoId : null;
+      const previousObra = editId ? obras.find(o => o.id === editId) : null;
+      const previousPresupuestoId = previousObra?.presupuestoId || null;
       if (formData.presupuestoId !== previousPresupuestoId) {
         const ppto = presupuestos.find(p => p.id === formData.presupuestoId);
         if (ppto) {
@@ -65,7 +66,11 @@ export default function Obras({ data, setData }) {
                 size: blob.size,
                 date: new Date().toISOString()
               };
-              await updateDoc('obras', docId, { archivos: [newFile, ...(formData.archivos || [])] });
+              // Eliminar PDF del presupuesto anterior si existía
+              const archivosSinAnterior = (formData.archivos || []).filter(
+                f => f.name !== `Presupuesto_${previousPresupuestoId}_Direccion.pdf`
+              );
+              await updateDoc('obras', docId, { archivos: [newFile, ...archivosSinAnterior] });
             }
           } catch (_) {
             // No bloquear el guardado si falla la generación del PDF
