@@ -4,18 +4,42 @@ import html2pdf from 'html2pdf.js';
 import PresupuestoPrint from '../pages/Presupuestos/PresupuestoPrint.jsx';
 
 /**
- * Genera un PDF del presupuesto en modo 'cliente' (para email).
- * Usa html2pdf.js renderizando PresupuestoPrint offscreen.
- * @param {Object} ppto - Documento presupuesto
- * @param {Object} data - appData con clientes, config, etc.
- * @param {string} mode - 'cliente' | 'direccion' | 'colaboradores'
+ * Genera un PDF a partir de un elemento del DOM ya visible en pantalla.
+ * Captura el elemento pasado como parámetro (omite elementos con clase .no-print).
+ *
+ * @param {HTMLElement} element - Elemento ya renderizado y visible
+ * @param {string} filename - Nombre del archivo PDF resultante
  * @returns {Promise<{blob: Blob, filename: string}>}
+ */
+export async function generatePdfFromElement(element, filename) {
+  const blob = await html2pdf()
+    .from(element)
+    .set({
+      margin: 10,
+      filename,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        ignoreElements: (el) => el.classList.contains('no-print')
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    })
+    .outputPdf('blob');
+  return { blob, filename };
+}
+
+/**
+ * Genera un PDF del presupuesto.
+ * html2canvas necesita que el contenido esté VISIBLE y ON-SCREEN.
+ * Usamos un contenedor visible brevemente, se elimina tras capturar.
  */
 export async function generatePresupuestoPdf(ppto, data, mode = 'cliente') {
   return new Promise((resolve, reject) => {
-    // Contenedor offscreen
+    // Contenedor VISIBLE en pantalla para que html2canvas lo capture
     const container = document.createElement('div');
-    container.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;background:white;';
+    container.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:100vh;overflow:auto;background:white;z-index:99999;';
     document.body.appendChild(container);
 
     const root = createRoot(container);
@@ -37,16 +61,20 @@ export async function generatePresupuestoPdf(ppto, data, mode = 'cliente') {
       })
     );
 
-    // Esperar render + recursos (imágenes, fuentes)
+    // Esperar render completo + recursos
     setTimeout(async () => {
       try {
+        // Expandir el contenedor al tamaño real del contenido antes de capturar
+        container.style.height = 'auto';
+        container.style.overflow = 'visible';
+        
         const blob = await html2pdf()
           .from(container)
           .set({
             margin: 10,
             filename: `Presupuesto_${ppto.id}.pdf`,
             image: { type: 'jpeg', quality: 0.95 },
-            html2canvas: { scale: 2, useCORS: true, logging: false },
+            html2canvas: { scale: 2, useCORS: true, logging: false, scrollY: 0, windowHeight: container.scrollHeight },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
           })
           .outputPdf('blob');
@@ -57,6 +85,6 @@ export async function generatePresupuestoPdf(ppto, data, mode = 'cliente') {
         cleanup();
         reject(err);
       }
-    }, 800);
+    }, 1500);
   });
 }

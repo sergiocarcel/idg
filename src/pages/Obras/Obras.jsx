@@ -38,48 +38,47 @@ export default function Obras({ data, setData }) {
   const handleSave = async () => {
     if (!formData.nombre.trim()) return alert('El nombre de la obra es obligatorio.');
     const docId = editId || generateId(formData.nombre);
+    const previousObra = editId ? obras.find(o => o.id === editId) : null;
+    const previousPresupuestoId = previousObra?.presupuestoId || null;
+    const savedArchivos = formData.archivos || [];
+
     await saveDoc('obras', docId, { ...formData, id: docId });
+    setIsModalOpen(false); // Cerrar modal antes de generar PDF para evitar interferencias CSS
 
     // Si se acaba de vincular un presupuesto (nuevo o cambiado), generar PDF dirección
-    if (formData.presupuestoId) {
-      const previousObra = editId ? obras.find(o => o.id === editId) : null;
-      const previousPresupuestoId = previousObra?.presupuestoId || null;
-      if (formData.presupuestoId !== previousPresupuestoId) {
-        const ppto = presupuestos.find(p => p.id === formData.presupuestoId);
-        if (ppto) {
-          try {
-            const { blob } = await generatePresupuestoPdf(ppto, data, 'direccion');
-            const fd = new FormData();
-            fd.append('file', blob, `Presupuesto_${ppto.id}_Direccion.pdf`);
-            fd.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
-            fd.append('folder', `obras/${docId}`);
-            const uploaded = await fetch(
-              `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`,
-              { method: 'POST', body: fd }
-            ).then(r => r.json());
-            if (!uploaded.error) {
-              const newFile = {
-                id: Date.now().toString(),
-                name: `Presupuesto_${ppto.id}_Direccion.pdf`,
-                url: uploaded.secure_url,
-                type: 'document',
-                size: blob.size,
-                date: new Date().toISOString()
-              };
-              // Eliminar PDF del presupuesto anterior si existía
-              const archivosSinAnterior = (formData.archivos || []).filter(
-                f => f.name !== `Presupuesto_${previousPresupuestoId}_Direccion.pdf`
-              );
-              await updateDoc('obras', docId, { archivos: [newFile, ...archivosSinAnterior] });
-            }
-          } catch (_) {
-            // No bloquear el guardado si falla la generación del PDF
+    if (formData.presupuestoId && formData.presupuestoId !== previousPresupuestoId) {
+      const ppto = presupuestos.find(p => p.id === formData.presupuestoId);
+      if (ppto) {
+        try {
+          const { blob } = await generatePresupuestoPdf(ppto, data, 'direccion');
+          const fd = new FormData();
+          fd.append('file', blob, `Presupuesto_${ppto.id}_Direccion.pdf`);
+          fd.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+          fd.append('folder', `obras/${docId}`);
+          const uploaded = await fetch(
+            `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`,
+            { method: 'POST', body: fd }
+          ).then(r => r.json());
+          if (!uploaded.error) {
+            const newFile = {
+              id: Date.now().toString(),
+              name: `Presupuesto_${ppto.id}_Direccion.pdf`,
+              url: uploaded.secure_url,
+              type: 'document',
+              size: blob.size,
+              date: new Date().toISOString()
+            };
+            // Eliminar PDF del presupuesto anterior si existía
+            const archivosSinAnterior = savedArchivos.filter(
+              f => f.name !== `Presupuesto_${previousPresupuestoId}_Direccion.pdf`
+            );
+            await updateDoc('obras', docId, { archivos: [newFile, ...archivosSinAnterior] });
           }
+        } catch (_) {
+          // No bloquear el guardado si falla la generación del PDF
         }
       }
     }
-
-    setIsModalOpen(false);
   };
 
   const handleDelete = async (id) => {
