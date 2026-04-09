@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Edit2, Trash2, FileText, Download, Copy, Eye, Send, Lock, BookOpen, RotateCcw, Mail, Link2, X, MoreHorizontal, CheckCircle, Printer, MessageCircle, LayoutTemplate, FileSignature, RefreshCw, Paperclip } from 'lucide-react';
 import { openWhatsApp, sendEmail } from '../../utils/sendUtils';
-import { generatePdfFromElement } from '../../utils/pdfUtils';
+import { generatePdfFromElement, generatePresupuestoPdf } from '../../utils/pdfUtils';
 import { saveDoc, deleteDoc, updateDoc } from '../../services/db';
 import { createAndSendSigningRequest, checkSigningStatus, blobToBase64 } from '../../services/firmadev';
 import PresupuestoEditor from './PresupuestoEditor.jsx';
@@ -461,7 +461,29 @@ export default function Presupuestos({ data, setData, forceMode }) {
                               {ppto.estado === 'enviado' && (
                                 <button onClick={async () => {
                                   await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'aceptado' });
-                                  if (!ppto.obraId) setLinkObraModal(ppto);
+                                  if (!ppto.obraId) {
+                                    setLinkObraModal(ppto);
+                                  } else {
+                                    // Ya tiene obra vinculada: guardar PDF dirección en archivos de la obra
+                                    const obra = (data?.obras || []).find(o => o.id === ppto.obraId);
+                                    if (obra) {
+                                      try {
+                                        const { blob } = await generatePresupuestoPdf(ppto, data, 'direccion');
+                                        const fd = new FormData();
+                                        fd.append('file', blob, `Presupuesto_${ppto.id}_Direccion.pdf`);
+                                        fd.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+                                        fd.append('folder', `obras/${ppto.obraId}`);
+                                        const uploaded = await fetch(
+                                          `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`,
+                                          { method: 'POST', body: fd }
+                                        ).then(r => r.json());
+                                        if (!uploaded.error) {
+                                          const newFile = { id: Date.now().toString(), name: `Presupuesto_${ppto.id}_Direccion.pdf`, url: uploaded.secure_url, type: 'document', size: blob.size, date: new Date().toISOString() };
+                                          await updateDoc('obras', ppto.obraId, { archivos: [newFile, ...(obra.archivos || [])] });
+                                        }
+                                      } catch (_) {}
+                                    }
+                                  }
                                   setOpenMenu(null);
                                 }}
                                   style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#16a34a', textAlign: 'left' }}>
@@ -526,9 +548,37 @@ export default function Presupuestos({ data, setData, forceMode }) {
               <button className="btn-primary" onClick={async () => {
                 const obraId = document.getElementById('linkObraSelect').value;
                 if (!obraId) return;
-                await saveDoc('presupuestos', linkObraModal.id, { ...linkObraModal, estado: 'aceptado', obraId });
+                const ppto = linkObraModal;
+                await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'aceptado', obraId });
                 const obra = (data?.obras || []).find(o => o.id === obraId);
-                if (obra) await saveDoc('obras', obraId, { ...obra, presupuestoId: linkObraModal.id });
+                if (obra) {
+                  await saveDoc('obras', obraId, { ...obra, presupuestoId: ppto.id });
+                  // Generar PDF versión dirección y guardarlo en archivos de la obra
+                  try {
+                    const { blob } = await generatePresupuestoPdf({ ...ppto, obraId }, data, 'direccion');
+                    const fd = new FormData();
+                    fd.append('file', blob, `Presupuesto_${ppto.id}_Direccion.pdf`);
+                    fd.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+                    fd.append('folder', `obras/${obraId}`);
+                    const uploaded = await fetch(
+                      `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`,
+                      { method: 'POST', body: fd }
+                    ).then(r => r.json());
+                    if (!uploaded.error) {
+                      const newFile = {
+                        id: Date.now().toString(),
+                        name: `Presupuesto_${ppto.id}_Direccion.pdf`,
+                        url: uploaded.secure_url,
+                        type: 'document',
+                        size: blob.size,
+                        date: new Date().toISOString()
+                      };
+                      await updateDoc('obras', obraId, { archivos: [newFile, ...(obra.archivos || [])] });
+                    }
+                  } catch (_) {
+                    // No bloquear el flujo si falla la generacion del PDF
+                  }
+                }
                 setLinkObraModal(null);
               }}>Vincular</button>
             </div>

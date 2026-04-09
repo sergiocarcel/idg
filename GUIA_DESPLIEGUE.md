@@ -11,12 +11,15 @@ Guía completa para desplegar este CRM en un nuevo proyecto Firebase (nuevo clie
 3. [Configurar Autenticación](#3-configurar-autenticación)
 4. [Configurar Firestore (Base de Datos)](#4-configurar-firestore-base-de-datos)
 5. [Configurar Cloudinary (Almacenamiento)](#5-configurar-cloudinary-almacenamiento)
-6. [Variables de Entorno (.env)](#6-variables-de-entorno-env)
-7. [Compilar y Desplegar](#7-compilar-y-desplegar)
-8. [Configurar Google Calendar (Opcional)](#8-configurar-google-calendar-opcional)
-9. [Gestión de Usuarios](#9-gestión-de-usuarios)
-10. [Desarrollo Local con Emuladores](#10-desarrollo-local-con-emuladores)
-11. [Notas y Futuro](#11-notas-y-futuro)
+6. [Configurar EmailJS (Envío de Emails)](#6-configurar-emailjs-envío-de-emails)
+7. [Configurar firma.dev (Firma Electrónica)](#7-configurar-firmadev-firma-electrónica)
+8. [Variables de Entorno (.env)](#8-variables-de-entorno-env)
+9. [Compilar y Desplegar](#9-compilar-y-desplegar)
+10. [Configurar Google Calendar (Opcional)](#10-configurar-google-calendar-opcional)
+11. [Gestión de Usuarios](#11-gestión-de-usuarios)
+12. [Desarrollo Local con Emuladores](#12-desarrollo-local-con-emuladores)
+13. [Cambiar de Cuenta en Cada Servicio](#13-cambiar-de-cuenta-en-cada-servicio)
+14. [Notas y Futuro](#14-notas-y-futuro)
 
 ---
 
@@ -86,7 +89,80 @@ Usamos Cloudinary en vez de Firebase Storage para evitar el plan Blaze (de pago)
 
 ---
 
-## 6. Variables de Entorno (.env)
+## 6. Configurar EmailJS (Envío de Emails)
+
+EmailJS permite enviar emails directamente desde el navegador (sin servidor propio), funcionando en PC y móvil.  
+**Plan gratuito:** 200 emails/mes.  
+**Usado para:** enviar credenciales de acceso al portal a colaboradores.
+
+### Paso 1: Crear cuenta y conectar servicio de email
+1. Ir a [emailjs.com](https://emailjs.com) → Registrarse (gratis, sin tarjeta)
+2. Panel izquierdo → **Email Services** → **Add New Service**
+3. Seleccionar proveedor (ej: Gmail) → conectar con la cuenta de correo del cliente
+4. Copiar el **Service ID** (ej: `service_abc1234`)
+
+### Paso 2: Crear el template de acceso al portal
+1. Panel izquierdo → **Email Templates** → **Create New Template**
+2. El nombre es solo decorativo (ej: "Acceso Portal Colaboradores")
+3. Configurar los campos:
+   - **To email:** `{{to_email}}`
+   - **From name:** `{{from_name}}`
+   - **Subject:** `{{subject}}`
+   - **Content:** modo texto, escribir solo: `{{message}}`
+4. Guardar → copiar el **Template ID** (ej: `template_abc1234`)
+
+### Paso 3: Obtener la Public Key
+1. Panel superior derecho → **Account** → pestaña **General**
+2. Sección **"API Keys"** → copiar la **Public Key**
+
+---
+
+## 7. Configurar firma.dev (Firma Electrónica)
+
+firma.dev permite enviar presupuestos para que el cliente los firme electrónicamente desde su email, sin necesidad de instalar nada. El CRM lo usa en el módulo de Presupuestos → "Enviar para Firmar".
+
+**Coste:** ~0,03 € por sobre enviado (sin suscripción mensual).  
+**Plan gratuito:** No existe — cada envío tiene coste, pero se factura por uso real.
+
+### Paso 1: Crear cuenta en firma.dev
+1. Ir a [firma.dev](https://firma.dev) → Registrarse
+2. Verificar el email y completar el perfil
+
+### Paso 2: Obtener la API Key
+1. Dentro del panel de firma.dev, ir a **Configuración** → **API** (o **Workspace Settings**)
+2. Copiar la **API Key** del workspace (empieza por `fdk_...` o similar)
+3. Esta clave identifica tu workspace y se usará para todos los envíos
+
+### Paso 3: Configurar el template de firma (opcional pero recomendado)
+El CRM envía los sobres con una firma posicionada automáticamente en la última página del PDF. No requiere configurar templates en firma.dev — el posicionamiento se hace via API directamente desde el código.
+
+### Cómo funciona el flujo en el CRM
+1. El usuario abre un presupuesto → menú "..." → **Enviar para Firmar**
+2. El CRM genera el PDF, lo convierte a base64 y lo envía a la API de firma.dev
+3. firma.dev envía un email al cliente con un enlace para firmar
+4. El cliente firma desde su móvil o PC (sin registro)
+5. El CRM permite comprobar el estado con el botón **Comprobar Firma**
+6. Cuando el cliente firma, el PDF firmado se descarga automáticamente y se guarda en:
+   - El presupuesto (campo `pdfFirmadoUrl`)
+   - Los archivos de la obra vinculada (carpeta de documentos)
+
+### Coste estimado
+| Uso | Coste aprox. |
+|---|---|
+| 10 presupuestos/mes firmados | ~0,30 €/mes |
+| 50 presupuestos/mes firmados | ~1,50 €/mes |
+| 100 presupuestos/mes firmados | ~3,00 €/mes |
+
+> ℹ️ Solo se cobra cuando el cliente efectivamente firma. Los envíos rechazados o no firmados también consumen crédito en el momento del envío.
+
+### Cambiar de cuenta firma.dev (nuevo cliente)
+1. Registrar una nueva cuenta en [firma.dev](https://firma.dev)
+2. Obtener la nueva API Key
+3. Actualizar `VITE_FIRMADEV_API_KEY` en `.env`
+
+---
+
+## 8. Variables de Entorno (.env)
 
 Crear (o modificar) el archivo **`.env`** en la raíz del proyecto con las claves del nuevo cliente:
 
@@ -106,13 +182,25 @@ VITE_FIREBASE_APP_ID=1:000000000000:web:xxxxxxxxxx
 # ═══════════════════════════════════════════════
 VITE_CLOUDINARY_CLOUD_NAME=tu_cloud_name
 VITE_CLOUDINARY_UPLOAD_PRESET=tu_preset
+
+# ═══════════════════════════════════════════════
+# EMAILJS — Obtener del Paso 6
+# ═══════════════════════════════════════════════
+VITE_EMAILJS_SERVICE_ID=service_xxxxxxx
+VITE_EMAILJS_PUBLIC_KEY=xxxxxxxxxxxxxxxxxxxxx
+VITE_EMAILJS_TEMPLATE_PORTAL=template_xxxxxxx
+
+# ═══════════════════════════════════════════════
+# FIRMA.DEV — Obtener del Paso 7
+# ═══════════════════════════════════════════════
+VITE_FIRMADEV_API_KEY=fdk_xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 > 🔒 Este archivo **NUNCA** se sube al repositorio (está en `.gitignore`). Cada entorno (dev, producción, otro cliente) tiene su propio `.env`.
 
 ---
 
-## 7. Compilar y Desplegar
+## 9. Compilar y Desplegar
 
 ### Primera vez (vincular el proyecto Firebase al repo local)
 ```bash
@@ -129,20 +217,17 @@ firebase use --add
 npm run build
 
 # 2. Subir a los servidores de Google
-npx firebase deploy --only hosting
+firebase deploy --only firestore,hosting
 ```
 
 Tras ~30 segundos, la web estará disponible en:  
 **`https://tu-proyecto.web.app`**
 
-Para subir también las reglas de Firestore:
-```bash
-npx firebase deploy
-```
+> ⚠️ Se usa `--only firestore,hosting` porque Firebase Storage no está habilitado en este proyecto (los archivos van a Cloudinary). Si se añade Storage en el futuro, usar `firebase deploy` sin flags.
 
 ---
 
-## 8. Configurar Google Calendar (Opcional)
+## 10. Configurar Google Calendar (Opcional)
 
 Esta integración permite a los empleados sincronizar su calendario de Google con el CRM (bidireccional). **Es opcional** — sin ella, el calendario del CRM funciona de forma local.
 
@@ -180,7 +265,7 @@ Esta integración permite a los empleados sincronizar su calendario de Google co
 
 ---
 
-## 9. Gestión de Usuarios
+## 11. Gestión de Usuarios
 
 El CRM NO tiene un panel de auto-registro público. Los usuarios se crean manualmente:
 
@@ -200,7 +285,7 @@ El CRM NO tiene un panel de auto-registro público. Los usuarios se crean manual
 
 ---
 
-## 10. Desarrollo Local con Emuladores
+## 12. Desarrollo Local con Emuladores
 
 Para trabajar en local sin tocar la base de datos real:
 
@@ -218,7 +303,93 @@ npm run dev
 
 ---
 
-## 11. Notas y Futuro
+## 13. Cambiar de Cuenta en Cada Servicio
+
+Cuando despliegues para un nuevo cliente, cada servicio tiene su propio proceso para obtener nuevas credenciales. Solo necesitas actualizar el archivo `.env` y hacer un nuevo build.
+
+---
+
+### 🔥 Firebase (base de datos + hosting)
+
+**Cambiar de proyecto Firebase:**
+```bash
+# Ver proyectos vinculados
+firebase projects:list
+
+# Cambiar al proyecto del nuevo cliente
+firebase use nombre-del-proyecto
+
+# O añadir un nuevo alias
+firebase use --add
+```
+
+**Obtener nuevas claves:**
+1. [console.firebase.google.com](https://console.firebase.google.com) → seleccionar el proyecto
+2. Icono ⚙️ → **Configuración del proyecto** → pestaña **General**
+3. Sección "Tus apps" → apartado **"Configuración del SDK"** → modo **"Config"**
+4. Copiar el objeto `firebaseConfig` y mapear los valores a las variables `VITE_FIREBASE_*`
+
+**Cambiar de cuenta de Google:**
+```bash
+# Cerrar sesión
+firebase logout
+
+# Iniciar sesión con la nueva cuenta
+firebase login
+```
+
+---
+
+### 🖼️ Cloudinary (almacenamiento de fotos, PDFs, documentos)
+
+**Cambiar de cuenta Cloudinary:**
+1. Registrarse en [cloudinary.com](https://cloudinary.com) con la nueva cuenta
+2. Dashboard → copiar el **Cloud Name**
+3. Settings → Upload → crear nuevo **Upload Preset** (modo `Unsigned`)
+4. Actualizar en `.env`:
+   ```
+   VITE_CLOUDINARY_CLOUD_NAME=nuevo_cloud_name
+   VITE_CLOUDINARY_UPLOAD_PRESET=nuevo_preset
+   ```
+
+> ⚠️ Los archivos subidos a Cloudinary pertenecen a esa cuenta. Si cambias de cuenta, los enlaces de documentos anteriores dejarán de funcionar. Migrar archivos requiere hacerlo manualmente desde el panel de Cloudinary.
+
+---
+
+### ✉️ EmailJS (envío de emails a colaboradores)
+
+**Cambiar de cuenta EmailJS:**
+1. Registrarse en [emailjs.com](https://emailjs.com) con la nueva cuenta
+2. Crear un nuevo servicio de email (paso 6 de esta guía)
+3. Crear el template `template_portal_access` (paso 6 de esta guía)
+4. Actualizar en `.env`:
+   ```
+   VITE_EMAILJS_SERVICE_ID=service_nuevo
+   VITE_EMAILJS_PUBLIC_KEY=clave_nueva
+   VITE_EMAILJS_TEMPLATE_PORTAL=template_nuevo
+   ```
+
+> ℹ️ El plan gratuito de EmailJS permite 200 emails/mes. Si el cliente envía más, considerar el plan básico (~$15/mes) o reutilizar la misma cuenta EmailJS para varios clientes (cada uno con su propio servicio de email conectado).
+
+---
+
+### Flujo completo para un nuevo cliente
+
+```
+1. Crear proyecto Firebase nuevo  →  obtener VITE_FIREBASE_*
+2. Crear cuenta Cloudinary nueva  →  obtener VITE_CLOUDINARY_*
+3. Crear cuenta (o reusar) EmailJS →  obtener VITE_EMAILJS_*
+4. Crear cuenta firma.dev nueva   →  obtener VITE_FIRMADEV_API_KEY
+5. Actualizar .env con todas las claves nuevas
+6. npm run build
+7. firebase login  (si es otra cuenta Google)
+8. firebase use --add  (seleccionar el nuevo proyecto)
+9. firebase deploy --only firestore,hosting
+```
+
+---
+
+## 14. Notas y Futuro
 
 ### Almacenamiento de Vídeo
 Los 25 GB gratuitos de Cloudinary son suficientes para PDFs y fotos, pero si el equipo sube vídeos pesados (4K, tours), se agotarán rápido. Opciones:
@@ -242,4 +413,4 @@ Los 25 GB gratuitos de Cloudinary son suficientes para PDFs y fotos, pero si el 
 
 ---
 
-*Documento generado para el proyecto CRM IDG. Última actualización: Marzo 2026.*
+*Documento generado para el proyecto CRM IDG. Última actualización: Abril 2026.*
