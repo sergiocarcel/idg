@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Settings, Users, Save, Upload, Plus, Edit2, Shield, UserX, CheckCircle, UploadCloud, Info } from 'lucide-react';
+import { Settings, Users, Save, Upload, Plus, Edit2, Shield, UserX, CheckCircle, UploadCloud, Info, Loader2 } from 'lucide-react';
 import { saveDoc } from '../../services/db';
 
 export default function Configuracion({ data, setData }) {
   const [activeTab, setActiveTab] = useState('general'); // 'general' o 'usuarios'
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const [empresa, setEmpresa] = useState(data?.config?.empresa || {
     nombre: 'Innovate Design Group',
@@ -14,6 +15,7 @@ export default function Configuracion({ data, setData }) {
     email: 'contacto@idg.es',
     iban: 'ES00 0000 0000 0000 0000 0000',
     pieFactura: 'Inscrita en el Registro Mercantil...',
+    condicionesPresupuesto: 'Validez operativa del presupuesto: 30 días. Los precios no incluyen licencias ni permisos de obra a menos que se indique explícitamente en una partida.',
     logoId: ''
   });
 
@@ -25,6 +27,20 @@ export default function Configuracion({ data, setData }) {
 
   const handleEmpresaChange = (field) => (e) => setEmpresa({ ...empresa, [field]: e.target.value });
 
+  const wrapCondicionesSelection = (tag) => {
+    const ta = document.getElementById('condiciones-empresa-textarea');
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const val = empresa.condicionesPresupuesto || '';
+    const newVal = val.substring(0, start) + `<${tag}>` + val.substring(start, end) + `</${tag}>` + val.substring(end);
+    setEmpresa(prev => ({ ...prev, condicionesPresupuesto: newVal }));
+    setTimeout(() => {
+      ta.focus();
+      ta.setSelectionRange(start + tag.length + 2, end + tag.length + 2);
+    }, 0);
+  };
+
   const handleLogoUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -33,34 +49,41 @@ export default function Configuracion({ data, setData }) {
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        // Calcular nuevas dimensiones manteniendo proporciones (Máximo 300px o 300px)
         const MAX_WIDTH = 300;
         const MAX_HEIGHT = 300;
         let width = img.width;
         let height = img.height;
 
         if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
+          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
         } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
+          if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
         }
 
-        // Usar canvas para redimensionar y recomprimir
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
 
-        // Convertir la imagen reducida a Base64 súper ligero (WebP o JPEG en su defecto)
-        const dataUrl = canvas.toDataURL('image/webp', 0.8);
-        setEmpresa({ ...empresa, logoId: dataUrl });
+        canvas.toBlob(async (blob) => {
+          setUploadingLogo(true);
+          try {
+            const fd = new FormData();
+            fd.append('file', blob, 'logo.webp');
+            fd.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+            fd.append('folder', 'config');
+            const res = await fetch(
+              `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`,
+              { method: 'POST', body: fd }
+            ).then(r => r.json());
+            if (res.error) throw new Error(res.error.message);
+            setEmpresa(prev => ({ ...prev, logoId: res.secure_url }));
+          } catch (err) {
+            alert('Error subiendo el logo: ' + (err.message || 'Error desconocido'));
+          } finally {
+            setUploadingLogo(false);
+          }
+        }, 'image/webp', 0.8);
       };
       img.src = event.target.result;
     };
@@ -139,20 +162,21 @@ export default function Configuracion({ data, setData }) {
               )}
             </div>
             
-            <input 
-              type="file" 
-              id="logo-upload-input" 
-              accept="image/*" 
-              style={{ display: 'none' }} 
-              onChange={handleLogoUpload} 
+            <input
+              type="file"
+              id="logo-upload-input"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleLogoUpload}
             />
-            
-            <button 
-              className="btn-secondary" 
-              style={{ width: '100%', justifyContent: 'center' }} 
-              onClick={() => document.getElementById('logo-upload-input').click()}
+
+            <button
+              className="btn-secondary"
+              style={{ width: '100%', justifyContent: 'center' }}
+              onClick={() => !uploadingLogo && document.getElementById('logo-upload-input').click()}
+              disabled={uploadingLogo}
             >
-              {empresa.logoId ? 'Cambiar Imagen' : 'Seleccionar Imagen'}
+              {uploadingLogo ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Subiendo...</> : (empresa.logoId ? 'Cambiar Imagen' : 'Seleccionar Imagen')}
             </button>
             {empresa.logoId && (
               <button 
@@ -196,6 +220,15 @@ export default function Configuracion({ data, setData }) {
               <div className="form-group full-width">
                 <label>Texto Pie de Página (Legal, LOPD...)</label>
                 <textarea rows="3" value={empresa.pieFactura} onChange={handleEmpresaChange('pieFactura')}></textarea>
+              </div>
+              <div className="form-group full-width">
+                <label>Condiciones Generales de Presupuestos (Aparecen al pie del PDF)</label>
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                  <button type="button" onClick={() => wrapCondicionesSelection('b')} style={{ padding: '2px 8px', fontWeight: 700, fontSize: '12px', border: '1px solid var(--border)', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}>B</button>
+                  <button type="button" onClick={() => wrapCondicionesSelection('i')} style={{ padding: '2px 8px', fontStyle: 'italic', fontSize: '12px', border: '1px solid var(--border)', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}>I</button>
+                </div>
+                <textarea id="condiciones-empresa-textarea" rows="4" value={empresa.condicionesPresupuesto || ''} onChange={handleEmpresaChange('condicionesPresupuesto')} placeholder="Ej: Validez operativa del presupuesto: 30 días..."></textarea>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Este texto se mostrará como condiciones generales en todos los PDFs de presupuestos. Selecciona texto y pulsa B o I para formatear. También se puede personalizar por presupuesto.</div>
               </div>
             </div>
 

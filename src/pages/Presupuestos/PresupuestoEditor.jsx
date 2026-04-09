@@ -1,21 +1,42 @@
 import React, { useState } from 'react';
-import { X, Plus, Trash2, ArrowUp, ArrowDown, Save, FileText } from 'lucide-react';
+import { X, Plus, Trash2, ArrowUp, ArrowDown, Save, FileText, LayoutTemplate, Trash } from 'lucide-react';
+import { deleteDoc } from '../../services/db';
 
-export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
+export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave, onClose }) {
   const [activeSearch, setActiveSearch] = useState({ capIdx: null, partIdx: null });
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const isNew = !ppto;
   const [formData, setFormData] = useState(ppto || {
-    id: 'PRE-' + Math.random().toString(36).substr(2, 6).toUpperCase(),
+    id: '',
     clienteId: '',
     obraId: '',
     fecha: new Date().toISOString().split('T')[0],
     estado: 'borrador',
     notas: '',
+    condicionesPresupuesto: '',
     capitulos: [
       { id: 'CAP-1', nombre: 'Capítulo 1', partidas: [{ descripcion: '', unidad: 'ud', cantidad: 1, precioCoste: 0, precioVenta: 0 }] }
-    ]
+    ],
+    extras: []
   });
 
+  const idExists = isNew && formData.id && (data?.presupuestos || []).some(p => p.id === formData.id);
+
   const handleChange = (field) => (e) => setFormData({ ...formData, [field]: e.target.value });
+
+  const wrapCondicionesSelection = (tag) => {
+    const ta = document.getElementById('condiciones-ppto-textarea');
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const val = formData.condicionesPresupuesto || '';
+    const newVal = val.substring(0, start) + `<${tag}>` + val.substring(start, end) + `</${tag}>` + val.substring(end);
+    setFormData(prev => ({ ...prev, condicionesPresupuesto: newVal }));
+    setTimeout(() => {
+      ta.focus();
+      ta.setSelectionRange(start + tag.length + 2, end + tag.length + 2);
+    }, 0);
+  };
 
   const addCapitulo = () => {
     setFormData({
@@ -53,6 +74,42 @@ export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
     return sum + cap.partidas.reduce((s, p) => s + (p.cantidad * p.precioVenta), 0);
   }, 0);
 
+  const totalExtras = (formData.extras || []).reduce((sum, cap) => {
+    return sum + cap.partidas.reduce((s, p) => s + (p.cantidad * p.precioVenta), 0);
+  }, 0);
+
+  const addExtra = () => {
+    setFormData({
+      ...formData,
+      extras: [...(formData.extras || []), { id: 'EXT-' + Date.now(), nombre: 'Nuevo Extra', partidas: [] }]
+    });
+  };
+
+  const removeExtra = (index) => {
+    const newExtras = [...(formData.extras || [])];
+    newExtras.splice(index, 1);
+    setFormData({ ...formData, extras: newExtras });
+  };
+
+  const addPartidaExtra = (extIdx) => {
+    const newExtras = [...(formData.extras || [])];
+    newExtras[extIdx].partidas.push({ descripcion: '', unidad: 'ud', cantidad: 1, precioCoste: 0, precioVenta: 0 });
+    setFormData({ ...formData, extras: newExtras });
+  };
+
+  const updatePartidaExtra = (extIdx, partIdx, field, value) => {
+    const newExtras = [...(formData.extras || [])];
+    const val = (field === 'descripcion' || field === 'unidad') ? value : (parseFloat(value) || 0);
+    newExtras[extIdx].partidas[partIdx][field] = val;
+    setFormData({ ...formData, extras: newExtras });
+  };
+
+  const removePartidaExtra = (extIdx, partIdx) => {
+    const newExtras = [...(formData.extras || [])];
+    newExtras[extIdx].partidas.splice(partIdx, 1);
+    setFormData({ ...formData, extras: newExtras });
+  };
+
   const formatCurrency = (val) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(val);
 
   return (
@@ -64,13 +121,19 @@ export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
           <div>
             <h2 style={{ fontSize: '18px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FileText size={20} className="text-blue-600" />
-              {ppto ? 'Editar Presupuesto' : 'Nuevo Presupuesto'} &middot; {formData.id}
+              {ppto ? 'Editar Presupuesto' : 'Nuevo Presupuesto'} · {formData.id || '(sin ID)'}
             </h2>
           </div>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <span style={{ fontSize: '18px', fontWeight: 800, color: '#16a34a', display: 'flex', alignItems: 'center', marginRight: '16px' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <span style={{ fontSize: '18px', fontWeight: 800, color: '#16a34a', display: 'flex', alignItems: 'center', marginRight: '8px' }}>
               Total: {formatCurrency(totalPresupuesto)}
+              {totalExtras > 0 && <span style={{ fontSize: '13px', color: '#d97706', marginLeft: '8px' }}>+ Extras: {formatCurrency(totalExtras)}</span>}
             </span>
+            {isNew && plantillas.length > 0 && (
+              <button className="btn-secondary" style={{ fontSize: '12px', color: '#7c3aed', borderColor: '#c4b5fd' }} onClick={() => setShowTemplateSelector(true)}>
+                <LayoutTemplate size={14} /> Cargar Plantilla
+              </button>
+            )}
             <button className="icon-btn" onClick={onClose}><X size={18} /></button>
           </div>
         </div>
@@ -80,6 +143,29 @@ export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
           
           <div className="stat-card" style={{ padding: '20px', marginBottom: '24px' }}>
             <div className="form-grid">
+              <div className="form-group full-width">
+                <label>Identificador del Presupuesto *</label>
+                <input 
+                  type="text" 
+                  value={formData.id} 
+                  onChange={handleChange('id')} 
+                  placeholder="Ej: PRE-REFORMA-GARCIA, PRE-2026-001..." 
+                  disabled={!isNew}
+                  autoFocus={isNew}
+                  style={{ 
+                    fontWeight: 600, 
+                    fontSize: '15px',
+                    ...(isNew && idExists ? { borderColor: '#dc2626', background: '#fef2f2' } : {}),
+                    ...(!isNew ? { background: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' } : {})
+                  }}
+                />
+                {isNew && idExists && (
+                  <div style={{ color: '#dc2626', fontSize: '11px', marginTop: '4px', fontWeight: 600 }}>⚠ Ya existe un presupuesto con este ID. Elige otro nombre.</div>
+                )}
+                {isNew && !formData.id && (
+                  <div style={{ color: '#d97706', fontSize: '11px', marginTop: '4px' }}>Introduce un ID único para identificar este presupuesto.</div>
+                )}
+              </div>
               <div className="form-group half-width">
                 <label>Cliente</label>
                 <select value={formData.clienteId} onChange={handleChange('clienteId')}>
@@ -98,14 +184,14 @@ export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
                 <label>Fecha Emisión</label>
                 <input type="date" value={formData.fecha} onChange={handleChange('fecha')} />
               </div>
-              <div className="form-group half-width">
-                <label>Estado</label>
-                <select value={formData.estado} onChange={handleChange('estado')}>
-                  <option value="borrador">Borrador</option>
-                  <option value="enviado">Enviado al Cliente</option>
-                  <option value="aceptado">Aceptado</option>
-                  <option value="rechazado">Rechazado</option>
-                </select>
+              <div className="form-group full-width">
+                <label>Condiciones Generales de Presupuestos (Aparecen al pie del PDF)</label>
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                  <button type="button" onClick={() => wrapCondicionesSelection('b')} style={{ padding: '2px 8px', fontWeight: 700, fontSize: '12px', border: '1px solid var(--border)', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}>B</button>
+                  <button type="button" onClick={() => wrapCondicionesSelection('i')} style={{ padding: '2px 8px', fontStyle: 'italic', fontSize: '12px', border: '1px solid var(--border)', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}>I</button>
+                </div>
+                <textarea id="condiciones-ppto-textarea" rows="3" value={formData.condicionesPresupuesto || ''} onChange={handleChange('condicionesPresupuesto')} placeholder="Si se rellena, sustituirá las condiciones generales de la empresa en el PDF..." />
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Si se rellena, sustituirá las condiciones generales de la empresa. Selecciona texto y pulsa B o I para formatear.</div>
               </div>
             </div>
           </div>
@@ -231,18 +317,166 @@ export default function PresupuestoEditor({ ppto, data, onSave, onClose }) {
               </div>
             );
           })}
+          {/* Separador y sección EXTRAS */}
+          <div style={{ marginTop: '32px', borderTop: '3px dashed #d97706', paddingTop: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#92400e' }}>Extras (Fuera del Presupuesto Base)</h3>
+                <p style={{ fontSize: '12px', color: '#b45309', marginTop: '2px' }}>Estos bloques aparecerán debajo del total del presupuesto como partidas adicionales opcionales.</p>
+              </div>
+              <button className="btn-secondary" style={{ borderColor: '#fbbf24', color: '#92400e', background: '#fffbeb' }} onClick={addExtra}>
+                <Plus size={14} /> Añadir Bloque Extra
+              </button>
+            </div>
+
+            {(formData.extras || []).map((ext, extIdx) => {
+              const extTotal = ext.partidas.reduce((s, p) => s + (p.cantidad * p.precioVenta), 0);
+              return (
+                <div key={ext.id} className="stat-card" style={{ padding: '0', marginBottom: '16px', border: '2px solid #fbbf24', overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 16px', background: '#fffbeb', borderBottom: '1px solid #fde68a', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <div style={{ fontWeight: 700, color: '#92400e', fontSize: '12px', minWidth: '60px' }}>EXTRA {extIdx + 1}</div>
+                    <input 
+                      type="text" value={ext.nombre} 
+                      onChange={(e) => {
+                        const newExtras = [...(formData.extras || [])];
+                        newExtras[extIdx].nombre = e.target.value;
+                        setFormData({ ...formData, extras: newExtras });
+                      }} 
+                      style={{ flex: 1, padding: '6px 10px', border: '1px solid transparent', background: 'transparent', fontWeight: 600, fontSize: '14px', outline: 'none', color: '#92400e' }}
+                      onFocus={e => e.target.style.background = '#fff'}
+                      onBlur={e => e.target.style.background = 'transparent'}
+                      placeholder="Nombre del extra..."
+                    />
+                    <div style={{ fontWeight: 800, fontSize: '14px', color: '#92400e' }}>{formatCurrency(extTotal)}</div>
+                    <button className="icon-btn danger" onClick={() => removeExtra(extIdx)}><Trash2 size={14} /></button>
+                  </div>
+                  <div style={{ padding: '16px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left', paddingBottom: '8px', color: 'var(--text-muted)' }}>Concepto</th>
+                          <th style={{ width: '60px', textAlign: 'center', paddingBottom: '8px', color: 'var(--text-muted)' }}>Unid</th>
+                          <th style={{ width: '70px', textAlign: 'center', paddingBottom: '8px', color: 'var(--text-muted)' }}>Cant</th>
+                          <th style={{ width: '90px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Precio</th>
+                          <th style={{ width: '100px', textAlign: 'right', paddingBottom: '8px', color: 'var(--text-muted)' }}>Total</th>
+                          <th style={{ width: '40px' }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ext.partidas.map((partida, partIdx) => (
+                          <tr key={partIdx} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '6px 0' }}>
+                              <input type="text" value={partida.descripcion || ''} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'descripcion', e.target.value)} style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: '6px' }} placeholder="Descripción del extra..." />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input type="text" value={partida.unidad || 'ud'} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'unidad', e.target.value)} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center', fontSize: '13px' }} />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input type="number" value={partida.cantidad} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'cantidad', e.target.value)} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center' }} />
+                            </td>
+                            <td style={{ padding: '6px 8px' }}>
+                              <input type="number" value={partida.precioVenta} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'precioVenta', e.target.value)} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'right' }} />
+                            </td>
+                            <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 600 }}>{formatCurrency(partida.cantidad * partida.precioVenta)}</td>
+                            <td style={{ padding: '6px 0', textAlign: 'right' }}>
+                              <button onClick={() => removePartidaExtra(extIdx, partIdx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div style={{ marginTop: '12px' }}>
+                      <button className="btn-secondary" style={{ fontSize: '11px', padding: '6px 12px' }} onClick={() => addPartidaExtra(extIdx)}>
+                        <Plus size={12} /> Añadir Línea Extra
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
         </div>
 
         {/* Footer */}
         <div className="modal-footer" style={{ background: '#fff' }}>
           <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-          <button className="btn-primary" onClick={() => onSave(formData)}>
+          <button className="btn-primary" onClick={() => {
+            if (!formData.id) return alert('Debes introducir un ID para el presupuesto');
+            if (isNew && idExists) return alert('Ya existe un presupuesto con ese ID');
+            onSave(formData);
+          }}>
             <Save size={16} /> Guardar Presupuesto
           </button>
         </div>
 
       </div>
+
+      {/* Modal selector de plantillas */}
+      {showTemplateSelector && (
+        <div className="modal-overlay" style={{ zIndex: 200 }}>
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2><LayoutTemplate size={18} style={{ marginRight: '8px' }} />Cargar Plantilla</h2>
+              <button className="icon-btn" onClick={() => setShowTemplateSelector(false)} style={{ background: 'none' }}><X size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ paddingBottom: '8px' }}>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                Selecciona una plantilla para cargar sus capítulos y extras. Sustituirá el contenido actual del presupuesto.
+              </p>
+              {plantillas.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#94a3b8', padding: '24px 0', fontSize: '13px' }}>No hay plantillas guardadas.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {plantillas.map(tpl => {
+                    const capCount = (tpl.capitulos || []).length;
+                    const extCount = (tpl.extras || []).length;
+                    const partCount = (tpl.capitulos || []).reduce((s, c) => s + (c.partidas || []).length, 0);
+                    return (
+                      <div key={tpl.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fafafa' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-main)' }}>{tpl.nombre}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                            {capCount} capítulo{capCount !== 1 ? 's' : ''} · {partCount} partida{partCount !== 1 ? 's' : ''}
+                            {extCount > 0 ? ` · ${extCount} extra${extCount !== 1 ? 's' : ''}` : ''}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button className="btn-primary" style={{ fontSize: '11px', padding: '6px 12px' }}
+                            onClick={() => {
+                              if (window.confirm(`¿Cargar la plantilla "${tpl.nombre}"? Se reemplazará el contenido actual.`)) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  capitulos: JSON.parse(JSON.stringify(tpl.capitulos || [])),
+                                  extras: JSON.parse(JSON.stringify(tpl.extras || [])),
+                                  condicionesPresupuesto: tpl.condicionesPresupuesto || '',
+                                }));
+                                setShowTemplateSelector(false);
+                              }
+                            }}>
+                            Cargar
+                          </button>
+                          <button className="icon-btn danger" title="Eliminar plantilla"
+                            onClick={async () => {
+                              if (window.confirm(`¿Eliminar la plantilla "${tpl.nombre}"?`)) {
+                                await deleteDoc('plantillasPresupuesto', tpl.id);
+                              }
+                            }}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setShowTemplateSelector(false)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

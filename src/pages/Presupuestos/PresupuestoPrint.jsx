@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import PdfHeader from '../../components/print/PdfHeader.jsx';
 import PdfFooter from '../../components/print/PdfFooter.jsx';
 
-export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente', printOnMount = true }) {
+export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente', printOnMount = true, companySignature = null }) {
   // Modes: 'direccion' (all columns), 'cliente' (no unit price, just total), 'colaboradores' (no price, no total)
   useEffect(() => {
     if (!printOnMount) return;
@@ -25,10 +25,14 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
   
   const formatCurrency = (val) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(val);
 
-  // direccion: todas las columnas (Precio + Total), sin IVA
-  // cliente: sin columna Precio, solo Total, con IVA
+  // Modos de exportación V3:
+  // - direccion: Concepto + Unidades + Cantidad + Precio + Total (por línea y global)
+  // - cliente: Concepto + Unidades + Cantidad + Total ग्लोबल (sin precio unitario ni total por línea)
+  // - colaboradores: Concepto + Unidades + Cantidad (sin ningún precio/total)
   const showPrice = mode === 'direccion';
-  const showTotal = true;
+  const showLineTotal = mode === 'direccion';
+  const showChapterTotal = mode === 'direccion' || mode === 'cliente';
+  const showGlobalTotal = mode !== 'colaboradores';
   const priceField = 'precioVenta';
 
   const calculateTotal = () => {
@@ -42,7 +46,7 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
   const totalConIva = total + iva;
 
   return (
-    <div className="print-container" style={{ position: 'fixed', inset: 0, background: 'white', zIndex: 9999, overflowY: 'auto' }}>
+    <div className="print-container" style={{ ...(printOnMount ? { position: 'fixed', inset: 0, zIndex: 9999, overflowY: 'auto' } : { position: 'relative' }), background: 'white' }}>
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px', color: '#000', fontFamily: 'Arial, sans-serif' }}>
         
         {/* Header Empresa y Cliente */}
@@ -51,7 +55,7 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
           rightContent={
             <>
               <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0, color: mode === 'direccion' ? '#dc2626' : '#2563eb' }}>
-                PRESUPUESTO {mode === 'direccion' ? '(DIRECCIÓN INTERNO)' : ''}
+                PRESUPUESTO {mode === 'direccion' ? '(DIRECCIÓN)' : (mode === 'colaboradores' ? '(COLABORADORES)' : '')}
               </h2>
               <div style={{ fontSize: '12px', marginTop: '4px', fontWeight: 'bold' }}>Nº {ppto.id}</div>
               <div style={{ fontSize: '12px', marginTop: '4px' }}>Fecha: {new Date(ppto.fecha).toLocaleDateString()}</div>
@@ -82,7 +86,7 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
               <th style={{ padding: '8px', textAlign: 'center', width: '50px' }}>Unidad</th>
               <th style={{ padding: '8px', textAlign: 'center', width: '50px' }}>Cant.</th>
               {showPrice && <th style={{ padding: '8px', textAlign: 'right', width: '90px' }}>Precio</th>}
-              {showTotal && <th style={{ padding: '8px', textAlign: 'right', width: '100px' }}>Importe</th>}
+              {(showLineTotal || showChapterTotal) && <th style={{ padding: '8px', textAlign: 'right', width: '100px' }}>Importe</th>}
             </tr>
           </thead>
           <tbody>
@@ -93,10 +97,10 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
                 <React.Fragment key={cap.id || capIdx}>
                   {/* Fila del capítulo */}
                   <tr style={{ background: '#fafafa' }}>
-                    <td colSpan={showPrice && showTotal ? 4 : (showTotal ? 3 : 3)} style={{ padding: '12px 8px', fontWeight: 'bold', borderBottom: '1px solid #ddd', color: '#1e3a8a' }}>
+                    <td colSpan={3 + (showPrice ? 1 : 0)} style={{ padding: '12px 8px', fontWeight: 'bold', borderBottom: '1px solid #ddd', color: '#1e3a8a' }}>
                       {capIdx + 1}. {cap.nombre.toUpperCase()}
                     </td>
-                    {showTotal && (
+                    {(showLineTotal || showChapterTotal) && (
                       <td style={{ padding: '12px 8px', fontWeight: 'bold', textAlign: 'right', borderBottom: '1px solid #ddd', color: '#1e3a8a' }}>
                         {formatCurrency(capTotal)}
                       </td>
@@ -114,7 +118,8 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
                         <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #eee', fontSize: '11px', color: '#666' }}>{partida.unidad || 'ud'}</td>
                         <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #eee', fontSize: '11px' }}>{partida.cantidad}</td>
                         {showPrice && <td style={{ padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #eee', fontSize: '11px' }}>{formatCurrency(precio)}</td>}
-                        {showTotal && <td style={{ padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #eee', fontSize: '11px' }}>{formatCurrency(importe)}</td>}
+                        {showLineTotal && <td style={{ padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #eee', fontSize: '11px' }}>{formatCurrency(importe)}</td>}
+                        {!showLineTotal && showChapterTotal && <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee' }}></td>}
                       </tr>
                     );
                   })}
@@ -125,7 +130,7 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
         </table>
 
         {/* Totales */}
-        {showTotal && (
+        {showGlobalTotal && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
             <div style={{ width: '250px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px' }}>
@@ -146,17 +151,109 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
           </div>
         )}
 
+        {/* Bloque EXTRAS (debajo del total) */}
+        {(ppto.extras || []).length > 0 && (
+          <div style={{ marginTop: '30px', borderTop: '2px dashed #d97706', paddingTop: '20px' }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: '#92400e', marginBottom: '16px' }}>
+              EXTRAS / PARTIDAS ADICIONALES
+            </div>
+            
+            {(ppto.extras || []).map((ext, extIdx) => {
+              const extTotal = ext.partidas.reduce((s, p) => s + (p.cantidad * p[priceField]), 0);
+              const extIva = extTotal * 0.21;
+              
+              return (
+                <div key={ext.id || extIdx} style={{ marginBottom: '20px' }}>
+                  {/* Tabla del extra */}
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '10px' }}>
+                    <tbody>
+                      {/* Cabecera del extra */}
+                      <tr style={{ background: '#fffbeb' }}>
+                        <td colSpan={3 + (showPrice ? 1 : 0)} style={{ padding: '10px 8px', fontWeight: 'bold', borderBottom: '1px solid #fde68a', color: '#92400e' }}>
+                          {extIdx + 1}. {ext.nombre.toUpperCase()}
+                        </td>
+                        {(showLineTotal || showChapterTotal) && (
+                          <td style={{ padding: '10px 8px', fontWeight: 'bold', textAlign: 'right', borderBottom: '1px solid #fde68a', color: '#92400e' }}>
+                            {formatCurrency(extTotal)}
+                          </td>
+                        )}
+                      </tr>
+                      
+                      {/* Partidas del extra */}
+                      {ext.partidas.map((partida, partIdx) => {
+                        const precio = partida[priceField];
+                        const importe = partida.cantidad * precio;
+                        return (
+                          <tr key={partIdx}>
+                            <td style={{ padding: '6px 8px', borderBottom: '1px solid #fef3c7', fontSize: '11px' }}>{partida.descripcion}</td>
+                            <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #fef3c7', fontSize: '11px', color: '#666' }}>{partida.unidad || 'ud'}</td>
+                            <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #fef3c7', fontSize: '11px' }}>{partida.cantidad}</td>
+                            {showPrice && <td style={{ padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #fef3c7', fontSize: '11px' }}>{formatCurrency(precio)}</td>}
+                            {showLineTotal && <td style={{ padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #fef3c7', fontSize: '11px' }}>{formatCurrency(importe)}</td>}
+                            {!showLineTotal && showChapterTotal && <td style={{ padding: '6px 8px', borderBottom: '1px solid #fef3c7' }}></td>}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  
+                  {/* Total del extra */}
+                  {showGlobalTotal && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <div style={{ width: '250px', background: '#fffbeb', padding: '8px 12px', borderRadius: '6px', border: '1px solid #fde68a' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#92400e' }}>
+                          <span>Subtotal Extra:</span>
+                          <span style={{ fontWeight: 600 }}>{formatCurrency(extTotal)}</span>
+                        </div>
+                        {mode === 'cliente' && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#92400e', marginTop: '2px' }}>
+                            <span>IVA (21%):</span>
+                            <span>{formatCurrency(extIva)}</span>
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 'bold', color: '#92400e', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #fde68a' }}>
+                          <span>Total Extra:</span>
+                          <span>{formatCurrency(mode === 'cliente' ? extTotal + extIva : extTotal)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Condiciones / Notas */}
         <PdfFooter
           empresa={data?.config?.empresa}
-          extraText={
-            <>
-              <strong>Condiciones Generales:</strong><br />
-              {ppto.notas || "Validez operativa del presupuesto: 30 días. Los precios no incluyen licencias ni permisos de obra a menos que se indique explícitamente en una partida."}
-            </>
-          }
+          extraText={`<strong>Condiciones Generales:</strong><br />${ppto.condicionesPresupuesto || data?.config?.empresa?.condicionesPresupuesto || "Validez operativa del presupuesto: 30 días. Los precios no incluyen licencias ni permisos de obra a menos que se indique explícitamente en una partida."}`}
         />
-        
+
+        {/* Bloque de firmas — solo en modo cliente, siempre en página propia */}
+        {mode === 'cliente' && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '40px', pageBreakBefore: 'always', pageBreakInside: 'avoid' }}>
+            {/* Firma empresa */}
+            <div style={{ width: '45%' }}>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '10px' }}>Por la empresa:</div>
+              {companySignature ? (
+                <img src={companySignature} alt="Firma empresa" style={{ height: '80px', maxWidth: '100%', objectFit: 'contain', display: 'block', borderBottom: '1px solid #000' }} />
+              ) : (
+                <div style={{ height: '80px', borderBottom: '1px solid #000' }} />
+              )}
+              <div style={{ fontSize: '11px', marginTop: '6px', color: '#555' }}>
+                Fdo: {data?.config?.empresa?.nombre || 'La empresa'}
+              </div>
+            </div>
+            {/* Firma cliente */}
+            <div style={{ width: '45%' }}>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '10px' }}>Conforme del cliente:</div>
+              <div style={{ height: '80px', borderBottom: '1px solid #000' }} />
+              <div style={{ fontSize: '11px', marginTop: '6px', color: '#555' }}>Fdo: El cliente</div>
+            </div>
+          </div>
+        )}
+
         {/* Footer print helper notice -> not visible on print */}
         <div className="no-print" style={{ textAlign: 'center', marginTop: '40px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
           <button onClick={onClose} style={{ padding: '8px 16px', cursor: 'pointer', background: '#e5e7eb', border: 'none', borderRadius: '4px' }}>Cancelar (o esc)</button>

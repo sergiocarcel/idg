@@ -14,7 +14,9 @@ export default function PdfFooter({ empresa, extraText }) {
   return (
     <div style={{ marginTop: '50px', fontSize: '10px', color: '#666', borderTop: '1px solid #ccc', paddingTop: '16px', lineHeight: '1.5' }}>
       {extraText && (
-        <div style={{ marginBottom: '8px' }}>{extraText}</div>
+        typeof extraText === 'string'
+          ? <div style={{ marginBottom: '8px' }} dangerouslySetInnerHTML={{ __html: extraText }} />
+          : <div style={{ marginBottom: '8px' }}>{extraText}</div>
       )}
       {emp.pieFactura && (
         <div>{emp.pieFactura}</div>
