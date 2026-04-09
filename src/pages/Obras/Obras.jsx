@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, X, FolderOpen, Calendar, MapPin, User, Users } from 'lucide-react';
-import { saveDoc, deleteDoc } from '../../services/db';
+import { saveDoc, deleteDoc, updateDoc } from '../../services/db';
+import { generatePresupuestoPdf } from '../../utils/pdfUtils';
 import Gantt from './Gantt.jsx';
 import CarpetaObra from './CarpetaObra.jsx';
 import ActasModificacion from './ActasModificacion.jsx';
@@ -29,11 +30,50 @@ export default function Obras({ data, setData }) {
     setFormData({ ...formData, [field]: e.target.value });
   };
 
-  const generateId = () => 'OBR-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+  const generateId = (nombre) => {
+    const slug = nombre.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 40);
+    return slug || 'OBR-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+  };
 
   const handleSave = async () => {
-    const docId = editId || generateId();
+    if (!formData.nombre.trim()) return alert('El nombre de la obra es obligatorio.');
+    const docId = editId || generateId(formData.nombre);
     await saveDoc('obras', docId, { ...formData, id: docId });
+
+    // Si se acaba de vincular un presupuesto (nuevo o cambiado), generar PDF dirección
+    if (formData.presupuestoId) {
+      const previousPresupuestoId = editId ? obras.find(o => o.id === editId)?.presupuestoId : null;
+      if (formData.presupuestoId !== previousPresupuestoId) {
+        const ppto = presupuestos.find(p => p.id === formData.presupuestoId);
+        if (ppto) {
+          try {
+            const { blob } = await generatePresupuestoPdf(ppto, data, 'direccion');
+            const fd = new FormData();
+            fd.append('file', blob, `Presupuesto_${ppto.id}_Direccion.pdf`);
+            fd.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+            fd.append('folder', `obras/${docId}`);
+            const uploaded = await fetch(
+              `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`,
+              { method: 'POST', body: fd }
+            ).then(r => r.json());
+            if (!uploaded.error) {
+              const newFile = {
+                id: Date.now().toString(),
+                name: `Presupuesto_${ppto.id}_Direccion.pdf`,
+                url: uploaded.secure_url,
+                type: 'document',
+                size: blob.size,
+                date: new Date().toISOString()
+              };
+              await updateDoc('obras', docId, { archivos: [newFile, ...(formData.archivos || [])] });
+            }
+          } catch (_) {
+            // No bloquear el guardado si falla la generación del PDF
+          }
+        }
+      }
+    }
+
     setIsModalOpen(false);
   };
 
@@ -81,7 +121,7 @@ export default function Obras({ data, setData }) {
       </header>
 
       <div style={{ display: 'grid', gridTemplateColumns: selectedObra ? '1fr 380px' : '1fr', gap: '24px', transition: 'all 0.3s' }}>
-        
+
         {/* Tabla Obras */}
         <div className="stat-card" style={{ padding: 0, overflow: 'hidden' }}>
           <table className="data-table">
@@ -102,8 +142,8 @@ export default function Obras({ data, setData }) {
               {obras.map(o => {
                 const isSelected = selectedObra?.id === o.id;
                 return (
-                  <tr 
-                    key={o.id} 
+                  <tr
+                    key={o.id}
                     onClick={() => setSelectedObra(isSelected ? null : o)}
                     className={isSelected ? 'selected-row' : ''}
                     style={{ cursor: 'pointer' }}
@@ -156,7 +196,7 @@ export default function Obras({ data, setData }) {
                 </div>
                 <button className="icon-btn" style={{ background: 'none' }} onClick={() => setSelectedObra(null)}><X size={18} /></button>
               </div>
-              
+
               <div style={{ padding: '20px' }}>
                 <div style={{ marginBottom: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
@@ -242,7 +282,7 @@ export default function Obras({ data, setData }) {
                 <label>Presupuesto</label>
                 <select value={formData.presupuestoId} onChange={handleInputChange('presupuestoId')}>
                   <option value="">Sin presupuesto</option>
-                  {presupuestos.map(p => <option key={p.id} value={p.id}>{p.id}</option>)}
+                  {presupuestos.filter(p => p.estado === 'aceptado').map(p => <option key={p.id} value={p.id}>{p.id}</option>)}
                 </select>
               </div>
               <div className="form-group half-width">
@@ -306,7 +346,7 @@ export default function Obras({ data, setData }) {
       )}
 
       {colabObra && (
-        <CarpetaColaboradores obra={colabObra} onClose={() => setColabObra(null)} />
+        <CarpetaColaboradores obra={colabObra} data={data} onClose={() => setColabObra(null)} />
       )}
     </div>
   );
