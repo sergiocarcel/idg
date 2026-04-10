@@ -15,6 +15,7 @@ import Proveedores from './pages/Proveedores/Proveedores.jsx';
 import Calendario from './pages/Calendario/Calendario.jsx';
 import Planificacion from './pages/Planificacion/Planificacion.jsx';
 import Login from './pages/Auth/Login.jsx';
+import PortalColaborador from './pages/Portal/PortalColaborador.jsx';
 
 import { listenToCollection, seedDatabaseIfNeeded } from './services/db';
 import { auth } from './config/firebase';
@@ -24,7 +25,8 @@ function App() {
     clientes: [], obras: [], presupuestos: [], pedidos: [], materiales: [],
     proveedores: [], trabajadores: [], registroHoras: [], documentosRRHH: [],
     facturas: [], catalogoPartidas: [], tareasDashboard: [], notificaciones: [],
-    eventos: [], planificacion: [], config: { empresa: null, usuarios: [] }
+    eventos: [], planificacion: [], colaboradores: [], plantillasPresupuesto: [],
+    config: { empresa: null, usuarios: [] }
   });
 
   const [loading, setLoading] = useState(true);
@@ -50,7 +52,7 @@ function App() {
       await seedDatabaseIfNeeded();
       
       const unsubs = [];
-      const cols = ['clientes', 'obras', 'presupuestos', 'pedidos', 'materiales', 'proveedores', 'trabajadores', 'registroHoras', 'documentosRRHH', 'facturas', 'catalogoPartidas', 'tareasDashboard', 'notificaciones', 'eventos', 'planificacion'];
+      const cols = ['clientes', 'obras', 'presupuestos', 'pedidos', 'materiales', 'proveedores', 'trabajadores', 'registroHoras', 'documentosRRHH', 'facturas', 'catalogoPartidas', 'tareasDashboard', 'notificaciones', 'eventos', 'planificacion', 'colaboradores', 'plantillasPresupuesto'];
       
       cols.forEach(col => {
         const unsub = listenToCollection(col, (data) => {
@@ -82,6 +84,17 @@ function App() {
     return <div style={{height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-main)', color: 'var(--text-muted)'}}>Cargando CRM...</div>;
   }
 
+  // Portal route — accessible without login
+  if (window.location.pathname === '/portal') {
+    return (
+      <BrowserRouter>
+        <Routes>
+          <Route path="/portal" element={<PortalColaborador />} />
+        </Routes>
+      </BrowserRouter>
+    );
+  }
+
   if (!user) {
     return <Login />;
   }
@@ -89,19 +102,18 @@ function App() {
   const currentUserConfig = appData.config?.usuarios?.find(u => u.email === user.email);
   const userRole = currentUserConfig?.rol || 'trabajador';
   const userName = currentUserConfig?.nombre || 'Usuario CRM';
-  // T16/T17: Check if user is an external collaborator (email in obra.compartidoCon but not in config.usuarios)
   const isColaboradorExterno = !currentUserConfig && (appData.obras || []).some(o => (o.compartidoCon || []).some(c => c.email === user.email));
 
   return (
     <BrowserRouter>
-      <Layout userRole={userRole} userName={userName} notificaciones={appData.notificaciones}>
+      <Layout userRole={userRole} userName={userName} notificaciones={(appData.notificaciones || []).filter(n => !n.destinatarios || n.destinatarios.length === 0 || n.destinatarios.some(e => e.toLowerCase() === (user.email || '').toLowerCase()))}>
         <Routes>
           <Route path="/" element={<Dashboard data={appData} setData={setAppData} />} />
           <Route path="/clientes" element={<Clientes data={appData} setData={setAppData} />} />
           <Route path="/obras" element={<Obras data={appData} setData={setAppData} />} />
           <Route path="/presupuestos" element={<Presupuestos data={appData} setData={setAppData} forceMode={isColaboradorExterno ? 'colaboradores' : null} />} />
           <Route path="/facturas" element={<Facturas data={appData} setData={setAppData} />} />
-          <Route path="/pedidos" element={<Pedidos data={appData} setData={setAppData} />} />
+          <Route path="/pedidos" element={<Pedidos data={appData} setData={setAppData} userName={userName} userEmail={user.email} />} />
           <Route path="/materiales" element={<Almacen data={appData} setData={setAppData} />} />
           <Route path="/proveedores" element={<Proveedores data={appData} setData={setAppData} />} />
           <Route path="/trabajadores" element={<Trabajadores data={appData} setData={setAppData} />} />

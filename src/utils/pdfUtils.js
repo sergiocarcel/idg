@@ -39,7 +39,7 @@ export async function generatePresupuestoPdf(ppto, data, mode = 'cliente') {
   return new Promise((resolve, reject) => {
     // Contenedor VISIBLE en pantalla para que html2canvas lo capture
     const container = document.createElement('div');
-    container.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:100vh;overflow:auto;background:white;z-index:99999;';
+    container.style.cssText = 'position:fixed;left:calc(50% - 400px);top:0;width:800px;height:auto;overflow:visible;background:white;z-index:1;pointer-events:none;';
     document.body.appendChild(container);
 
     const root = createRoot(container);
@@ -64,17 +64,16 @@ export async function generatePresupuestoPdf(ppto, data, mode = 'cliente') {
     // Esperar render completo + recursos
     setTimeout(async () => {
       try {
-        // Expandir el contenedor al tamaño real del contenido antes de capturar
-        container.style.height = 'auto';
-        container.style.overflow = 'visible';
-        
+        // Capturar el hijo interior (position:relative) en vez del wrapper fixed
+        // html2canvas tiene problemas conocidos con position:fixed como target
+        const target = container.firstElementChild || container;
         const blob = await html2pdf()
-          .from(container)
+          .from(target)
           .set({
             margin: 10,
             filename: `Presupuesto_${ppto.id}.pdf`,
             image: { type: 'jpeg', quality: 0.95 },
-            html2canvas: { scale: 2, useCORS: true, logging: false, scrollY: 0, windowHeight: container.scrollHeight },
+            html2canvas: { scale: 2, useCORS: true, allowTaint: false, logging: false },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
           })
           .outputPdf('blob');

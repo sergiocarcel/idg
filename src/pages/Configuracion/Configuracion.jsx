@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Users, Save, Upload, Plus, Edit2, Shield, UserX, CheckCircle, UploadCloud, Info, Loader2 } from 'lucide-react';
+import { Settings, Users, Save, Upload, Plus, Edit2, Shield, UserX, CheckCircle, UploadCloud, Info, Loader2, Trash2 } from 'lucide-react';
 import { saveDoc } from '../../services/db';
 
 export default function Configuracion({ data, setData }) {
@@ -97,6 +97,15 @@ export default function Configuracion({ data, setData }) {
     } catch (e) {
       alert('Hubo un error guardando tu configuración. Contáctame si persiste.');
     }
+  };
+
+  const handleUserDelete = async (userId) => {
+    if (!window.confirm('¿Eliminar este usuario de la lista?\n\nRecuerda que también debes eliminarlo manualmente en Firebase Authentication Console para que no pueda seguir accediendo.')) return;
+    const newUsers = usuarios.filter(u => u.id !== userId);
+    setUsuarios(newUsers);
+    await saveDoc('config', 'usuarios', { list: newUsers });
+    setIsUserModalOpen(false);
+    alert('Usuario eliminado de la lista.\n\nNo olvides eliminarlo también en Firebase Console → Authentication.');
   };
 
   const handleUserSave = async () => {
@@ -288,8 +297,9 @@ export default function Configuracion({ data, setData }) {
                         <span style={{ color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 500 }}><UserX size={14} /> Suspendido</span>
                       )}
                     </td>
-                    <td style={{ textAlign: 'right' }}>
+                    <td style={{ textAlign: 'right', display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
                       <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '11px' }} onClick={() => { setUserForm(u); setIsUserModalOpen(true); }}>Administrar</button>
+                      <button className="icon-btn danger" title="Eliminar usuario" onClick={() => handleUserDelete(u.id)}><Trash2 size={14} /></button>
                     </td>
                   </tr>
                 )
@@ -333,6 +343,11 @@ export default function Configuracion({ data, setData }) {
             </div>
             <div className="modal-footer">
               <button className="btn-secondary" onClick={() => setIsUserModalOpen(false)}>Cancelar</button>
+              {userForm.id && (
+                <button className="btn-secondary" style={{ color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }} onClick={() => handleUserDelete(userForm.id)}>
+                  <Trash2 size={14} /> Eliminar
+                </button>
+              )}
               <button className="btn-primary" onClick={handleUserSave}>{userForm.id ? 'Guardar Cambios' : 'Crear Acceso'}</button>
             </div>
           </div>

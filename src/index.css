@@ -326,6 +326,7 @@ body, html, #root {
   font-size: 13px;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
+  line-height: 1.5;
 }
 .data-table tbody tr { transition: background-color 0.15s; }
 .data-table tbody tr:hover { background-color: rgba(0,0,0,0.01); }
@@ -411,6 +412,7 @@ body, html, #root {
 }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .mobile-close-btn {
   display: none;
@@ -476,7 +478,6 @@ body, html, #root {
     display: block;
     width: 100%;
     overflow-x: auto;
-    white-space: nowrap;
   }
   
   /* Corregir los grid en formularios de modales */

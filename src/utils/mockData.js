@@ -22,7 +22,7 @@ export const initialData = {
     }
   ],
   pedidos: [
-    { id: 'PED-1', material: 'Sacos de cemento rápido', cantidad: '10 sacos', obraId: 'OBR-A', fechaNecesidad: '2026-03-28', asignadoA: 'Carlos O.', estado: 'pendiente', notas: 'Urgen para terminar rampa.' }
+    { id: 'PED-1', descripcion: '10 sacos de cemento rápido', obraId: 'OBR-A', prioridad: 'urgente', estado: 'pedido', solicitante: 'admin@idg.es', solicitanteNombre: 'Admin', notas: 'Para terminar la rampa.', createdAt: new Date().toISOString() }
   ],
   materiales: [
     { id: 'MAT-1', nombre: 'Hormigonera eléctrica 140L', cantidad: '1 ud', stock: 1, minimo: 1, responsable: 'Carlos O.', obraId: 'OBR-A', proveedorId: 'PROV-2', createdAt: '2026-03-20' },

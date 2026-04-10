@@ -11,7 +11,12 @@
       "Bash(npm run:*)",
       "Bash(firebase projects:list)",
       "Bash(npx firebase:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:docs.firma.dev)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

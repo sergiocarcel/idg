@@ -4,6 +4,7 @@ import { updateDoc } from '../../services/db';
 
 export default function CarpetaObra({ obra, data, setData, onClose }) {
   const [files, setFiles] = useState(obra.archivos || []);
+  useEffect(() => { setFiles(obra.archivos || []); }, [obra.archivos]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [activeTab, setActiveTab] = useState('documentos');
@@ -39,6 +40,7 @@ export default function CarpetaObra({ obra, data, setData, onClose }) {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('upload_preset', uploadPreset);
+      fd.append('folder', `obras/${obra.id}`);
 
       const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
         method: 'POST',

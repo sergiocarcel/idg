@@ -1,30 +1,74 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, X, ShoppingCart, Clock, CheckCircle, AlertCircle, PackageCheck, Paperclip, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, ShoppingCart, PackageCheck, Paperclip, Loader2, MessageCircle, Mail } from 'lucide-react';
 import { saveDoc, deleteDoc, updateDoc } from '../../services/db';
+import { openWhatsApp, sendEmail } from '../../utils/sendUtils';
 
-export default function Pedidos({ data, setData }) {
+export default function Pedidos({ data, setData, userName, userEmail }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPedido, setSelectedPedido] = useState(null);
-  
-  const initialForm = {
-    material: '', cantidad: '', obraId: '', fechaNecesidad: '', asignadoA: '', estado: 'pendiente', notas: '', albaranUrl: ''
-  };
+
+  const initialForm = { descripcion: '', obraId: '', prioridad: 'no_urgente', notas: '', albaranUrl: '', trabajadorId: '' };
   const [formData, setFormData] = useState(initialForm);
   const [isUploading, setIsUploading] = useState(false);
+  const [notifyModal, setNotifyModal] = useState(null);
 
   const pedidos = data?.pedidos || [];
   const obras = data?.obras || [];
+  const trabajadores = data?.trabajadores || [];
 
-  const getObraName = (id) => obras.find(o => o.id === id)?.nombre || 'Almacén Central (Varias Obras)';
+  const getObraName = (id) => obras.find(o => o.id === id)?.nombre || 'Almacén Central';
 
   const generateId = () => 'PED-' + Math.random().toString(36).substr(2, 6).toUpperCase();
 
   const handleInputChange = (field) => (e) => setFormData({ ...formData, [field]: e.target.value });
 
   const handleSave = async () => {
+    if (!formData.descripcion.trim()) return alert('Indica qué material o qué se necesita.');
+    if (!formData.trabajadorId) return alert('Selecciona el trabajador solicitante.');
     const docId = selectedPedido ? selectedPedido.id : generateId();
-    const docData = selectedPedido ? { ...formData, id: docId } : { ...formData, id: docId, createdAt: new Date().toISOString() };
+    const base = {
+      ...formData,
+      id: docId,
+      solicitante: userEmail || '',
+      solicitanteNombre: userName || userEmail || 'Usuario',
+    };
+    const docData = selectedPedido
+      ? base
+      : { ...base, estado: 'pedido', createdAt: new Date().toISOString() };
     await saveDoc('pedidos', docId, docData);
+
+    if (!selectedPedido) {
+      const usuarios = data?.config?.usuarios || [];
+      const destinatarios = usuarios
+        .filter(u => u.rol === 'logistica' && u.activo !== false)
+        .map(u => u.email)
+        .filter(Boolean);
+      if (destinatarios.length > 0) {
+        const notifId = 'NOTIF-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+        const obraName = obras.find(o => o.id === formData.obraId)?.nombre || 'Almacén Central';
+        const urgenteTxt = formData.prioridad === 'urgente' ? '⚡ URGENTE — ' : '';
+        await saveDoc('notificaciones', notifId, {
+          id: notifId,
+          tipo: formData.prioridad === 'urgente' ? 'alerta' : 'info',
+          mensaje: `${urgenteTxt}Nuevo pedido de ${base.solicitanteNombre}: "${formData.descripcion}" (${obraName})`,
+          leida: false,
+          fecha: new Date().toISOString(),
+          link: '/pedidos',
+          destinatarios
+        });
+      }
+
+      // Notificación al trabajador solicitante si tiene contacto
+      const trabajador = trabajadores.find(t => t.id === formData.trabajadorId);
+      if (trabajador && (trabajador.email || trabajador.telefono)) {
+        const obraNombre = obras.find(o => o.id === formData.obraId)?.nombre || 'Almacén Central';
+        setIsModalOpen(false);
+        setSelectedPedido(null);
+        setNotifyModal({ trabajador, pedido: docData, obraNombre });
+        return;
+      }
+    }
+
     setIsModalOpen(false);
     setSelectedPedido(null);
   };
@@ -34,12 +78,10 @@ export default function Pedidos({ data, setData }) {
     if (!file) return;
     setIsUploading(true);
     try {
-      const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-      const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
       const fd = new FormData();
       fd.append('file', file);
-      fd.append('upload_preset', uploadPreset);
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, { method: 'POST', body: fd });
+      fd.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`, { method: 'POST', body: fd });
       const result = await res.json();
       if (result.error) throw new Error(result.error.message);
       setFormData(prev => ({ ...prev, albaranUrl: result.secure_url }));
@@ -51,13 +93,20 @@ export default function Pedidos({ data, setData }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("¿Eliminar este pedido permanentemente?")) return;
+    if (!window.confirm('¿Eliminar este pedido permanentemente?')) return;
     await deleteDoc('pedidos', id);
   };
 
   const openForm = (pedido = null) => {
     if (pedido) {
-      setFormData(pedido);
+      setFormData({
+        descripcion: pedido.descripcion || pedido.material || '',
+        obraId: pedido.obraId || '',
+        prioridad: pedido.prioridad || 'no_urgente',
+        notas: pedido.notas || '',
+        albaranUrl: pedido.albaranUrl || '',
+        trabajadorId: pedido.trabajadorId || '',
+      });
       setSelectedPedido(pedido);
     } else {
       setFormData(initialForm);
@@ -66,32 +115,49 @@ export default function Pedidos({ data, setData }) {
     setIsModalOpen(true);
   };
 
-  const changeStatus = async (id, newStatus) => {
-    await updateDoc('pedidos', id, { estado: newStatus });
+  const markEntregado = async (id) => {
+    await updateDoc('pedidos', id, { estado: 'entregado' });
   };
 
   const estadoBadge = (estado) => {
-    const map = {
-      'pendiente': { l: 'Pendiente', c: '#d97706', bg: '#fef3c7', icon: Clock },
-      'en_proceso': { l: 'En proceso', c: '#2563eb', bg: '#dbeafe', icon: ShoppingCart },
-      'entregado': { l: 'Entregado', c: '#16a34a', bg: '#dcfce7', icon: PackageCheck },
-      'cancelado': { l: 'Cancelado', c: '#dc2626', bg: '#fef2f2', icon: AlertCircle },
-    };
-    const s = map[estado] || map.pendiente;
-    const Icon = s.icon;
+    const isPedido = estado !== 'entregado';
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: s.bg, color: s.c, padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600 }}>
-        <Icon size={12} /> {s.l}
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: '4px',
+        background: isPedido ? '#dbeafe' : '#dcfce7',
+        color: isPedido ? '#2563eb' : '#16a34a',
+        padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600
+      }}>
+        {isPedido ? <ShoppingCart size={12} /> : <PackageCheck size={12} />}
+        {isPedido ? 'Pedido' : 'Entregado'}
       </span>
     );
   };
+
+  const prioridadBadge = (prioridad) => {
+    const urgente = prioridad === 'urgente';
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center',
+        background: urgente ? '#fef2f2' : '#f1f5f9',
+        color: urgente ? '#dc2626' : '#64748b',
+        padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700,
+        textTransform: 'uppercase', letterSpacing: '0.3px'
+      }}>
+        {urgente ? '⚡ Urgente' : 'Normal'}
+      </span>
+    );
+  };
+
+  const totalPedidos = pedidos.filter(p => p.estado !== 'entregado').length;
+  const totalUrgentes = pedidos.filter(p => p.prioridad === 'urgente' && p.estado !== 'entregado').length;
 
   return (
     <div className="page-container">
       <header className="page-header">
         <div>
           <h1 className="page-title">Pedidos de Material</h1>
-          <p className="page-subtitle">Peticiones enviadas por trabajadores a los responsables.</p>
+          <p className="page-subtitle">Peticiones de material para obra.</p>
         </div>
         <button className="btn-primary" onClick={() => openForm()}>
           <Plus size={16} /> Solicitar Material
@@ -100,25 +166,25 @@ export default function Pedidos({ data, setData }) {
 
       {/* Tarjetas resumen */}
       <div className="dashboard-grid" style={{ marginBottom: '24px' }}>
-        <div className="stat-card" style={{ padding: '20px', borderTop: '4px solid #f59e0b' }}>
-          <h3 style={{ fontSize: '12px' }}>Nuevos / Pendientes</h3>
-          <div className="stat-value" style={{ color: '#d97706' }}>{pedidos.filter(p => p.estado === 'pendiente').length}</div>
-        </div>
         <div className="stat-card" style={{ padding: '20px', borderTop: '4px solid #3b82f6' }}>
-          <h3 style={{ fontSize: '12px' }}>En Proceso</h3>
-          <div className="stat-value" style={{ color: '#2563eb' }}>{pedidos.filter(p => p.estado === 'en_proceso').length}</div>
+          <h3 style={{ fontSize: '12px' }}>Pendientes de entrega</h3>
+          <div className="stat-value" style={{ color: '#2563eb' }}>{totalPedidos}</div>
+        </div>
+        <div className="stat-card" style={{ padding: '20px', borderTop: '4px solid #dc2626' }}>
+          <h3 style={{ fontSize: '12px' }}>Urgentes</h3>
+          <div className="stat-value" style={{ color: '#dc2626' }}>{totalUrgentes}</div>
         </div>
       </div>
 
-      {/* Tabla Lista */}
+      {/* Tabla */}
       <div className="stat-card" style={{ padding: 0, overflow: 'hidden' }}>
         <table className="data-table">
           <thead>
             <tr>
-              <th>Material Solicitado</th>
-              <th>Obra Destino</th>
-              <th>Fecha Límite</th>
-              <th>Responsable</th>
+              <th>Descripción</th>
+              <th>Prioridad</th>
+              <th>Obra</th>
+              <th>Solicitante</th>
               <th>Estado</th>
               <th style={{ textAlign: 'center' }}>Albarán</th>
               <th></th>
@@ -126,36 +192,31 @@ export default function Pedidos({ data, setData }) {
           </thead>
           <tbody>
             {pedidos.length === 0 && (
-              <tr><td colSpan="7" style={{textAlign:'center', padding:'32px', color:'#94a3b8'}}>No hay solicitudes de material activas</td></tr>
+              <tr><td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>No hay solicitudes de material activas</td></tr>
             )}
             {pedidos.map(p => (
               <tr key={p.id}>
                 <td>
-                  <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{p.cantidad} x {p.material}</div>
-                  {p.notas && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.notas}</div>}
+                  <div style={{ fontWeight: 600, color: 'var(--text-main)', maxWidth: '280px' }}>{p.descripcion || `${p.cantidad || ''} ${p.material || ''}`.trim()}</div>
+                  {p.notas && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', maxWidth: '280px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.notas}</div>}
                 </td>
+                <td>{prioridadBadge(p.prioridad)}</td>
                 <td style={{ fontSize: '12px', fontWeight: 500 }}>{getObraName(p.obraId)}</td>
-                <td style={{ fontSize: '12px', color: new Date(p.fechaNecesidad) < new Date() && p.estado !== 'entregado' ? '#ef4444' : 'var(--text-main)', fontWeight: new Date(p.fechaNecesidad) < new Date() ? 700 : 400 }}>
-                  {p.fechaNecesidad ? new Date(p.fechaNecesidad).toLocaleDateString() : 'Sin fecha'}
-                </td>
-                <td style={{ fontSize: '13px' }}>{p.asignadoA || '—'}</td>
+                <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{p.solicitanteNombre || p.asignadoA || '—'}</td>
                 <td>{estadoBadge(p.estado)}</td>
                 <td style={{ textAlign: 'center' }}>
-                  {p.albaranUrl ? (
-                    <a href={p.albaranUrl} target="_blank" rel="noopener noreferrer" title="Ver albarán adjunto" style={{ color: '#3b82f6' }}><Paperclip size={14} /></a>
-                  ) : (
-                    <span style={{ color: '#cbd5e1' }}>—</span>
-                  )}
+                  {p.albaranUrl
+                    ? <a href={p.albaranUrl} target="_blank" rel="noopener noreferrer" title="Ver albarán adjunto" style={{ color: '#3b82f6' }}><Paperclip size={14} /></a>
+                    : <span style={{ color: '#cbd5e1' }}>—</span>}
                 </td>
                 <td>
                   <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                    {p.estado === 'pendiente' && (
-                      <button onClick={() => changeStatus(p.id, 'en_proceso')} className="btn-secondary" style={{ padding: '4px 8px', fontSize: '10px', color: '#2563eb', borderColor: '#bfdbfe', background: '#eff6ff' }}>Procesar</button>
+                    {p.estado !== 'entregado' && (
+                      <button onClick={() => markEntregado(p.id)} className="btn-secondary" style={{ padding: '4px 8px', fontSize: '10px', color: '#16a34a', borderColor: '#bbf7d0', background: '#f0fdf4' }}>
+                        <PackageCheck size={12} /> Entregado
+                      </button>
                     )}
-                    {p.estado === 'en_proceso' && (
-                      <button onClick={() => changeStatus(p.id, 'entregado')} className="btn-secondary" style={{ padding: '4px 8px', fontSize: '10px', color: '#16a34a', borderColor: '#bbf7d0', background: '#f0fdf4' }}>Entregar</button>
-                    )}
-                    <button className="icon-btn" onClick={() => openForm(p)} title="Editar pedido"><Edit2 size={14} /></button>
+                    <button className="icon-btn" onClick={() => openForm(p)} title="Editar"><Edit2 size={14} /></button>
                     <button className="icon-btn danger" onClick={() => handleDelete(p.id)} title="Eliminar"><Trash2 size={14} /></button>
                   </div>
                 </td>
@@ -165,53 +226,160 @@ export default function Pedidos({ data, setData }) {
         </table>
       </div>
 
+      {/* Modal notificación al trabajador */}
+      {notifyModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '380px' }}>
+            <div className="modal-header">
+              <h2>Notificar al trabajador</h2>
+              <button className="icon-btn" onClick={() => setNotifyModal(null)} style={{ background: 'none' }}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+                ¿Cómo quieres avisar a <strong>{notifyModal.trabajador.nombre} {notifyModal.trabajador.apellidos || ''}</strong> del nuevo pedido?
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {notifyModal.trabajador.telefono && (
+                  <button
+                    className="btn-secondary"
+                    style={{ justifyContent: 'flex-start', gap: '10px', padding: '12px 16px' }}
+                    onClick={() => {
+                      const { trabajador, pedido, obraNombre } = notifyModal;
+                      const msg = `Hola ${trabajador.nombre}, se ha creado un nuevo pedido para la obra "${obraNombre}":\n\n${pedido.descripcion}\n\nPrioridad: ${pedido.prioridad === 'urgente' ? 'URGENTE' : 'No urgente'}\n\nPara más detalles entra en el CRM.`;
+                      openWhatsApp(trabajador.telefono, msg);
+                      setNotifyModal(null);
+                    }}
+                  >
+                    <MessageCircle size={16} style={{ color: '#25D366' }} />
+                    <span>WhatsApp</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: 'auto' }}>{notifyModal.trabajador.telefono}</span>
+                  </button>
+                )}
+                {notifyModal.trabajador.email && (
+                  <button
+                    className="btn-secondary"
+                    style={{ justifyContent: 'flex-start', gap: '10px', padding: '12px 16px' }}
+                    onClick={async () => {
+                      const { trabajador, pedido, obraNombre } = notifyModal;
+                      const message = `Hola ${trabajador.nombre},\n\nSe ha creado un nuevo pedido para la obra "${obraNombre}":\n\n${pedido.descripcion}\n\nPrioridad: ${pedido.prioridad === 'urgente' ? 'URGENTE' : 'No urgente'}\n\nPara más información entra en el CRM.\n\n— IDG`;
+                      const result = await sendEmail(import.meta.env.VITE_EMAILJS_TEMPLATE_PORTAL, {
+                        to_email: trabajador.email,
+                        to_name: `${trabajador.nombre} ${trabajador.apellidos || ''}`.trim(),
+                        subject: `Nuevo pedido asignado — ${obraNombre}`,
+                        message,
+                        from_name: 'IDG',
+                      });
+                      if (result.success) alert('✅ Email enviado correctamente');
+                      else alert('❌ Error al enviar email: ' + (result.error || 'Error desconocido'));
+                      setNotifyModal(null);
+                    }}
+                  >
+                    <Mail size={16} style={{ color: '#3b82f6' }} />
+                    <span>Email</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: 'auto' }}>{notifyModal.trabajador.email}</span>
+                  </button>
+                )}
+                <button
+                  className="btn-secondary"
+                  style={{ justifyContent: 'flex-start', gap: '10px', padding: '12px 16px', color: 'var(--text-muted)' }}
+                  onClick={() => setNotifyModal(null)}
+                >
+                  <X size={16} />
+                  <span>Ninguna, omitir</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Formulario */}
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
               <h2>{selectedPedido ? 'Editar solicitud' : 'Nueva solicitud de material'}</h2>
-              <button className="icon-btn" onClick={() => setIsModalOpen(false)} style={{background: 'none'}}><X size={18} /></button>
+              <button className="icon-btn" onClick={() => setIsModalOpen(false)} style={{ background: 'none' }}><X size={18} /></button>
             </div>
             <div className="modal-body form-grid">
+
+              {/* Descripción libre */}
               <div className="form-group full-width">
-                <label>Qué material se necesita</label>
-                <input type="text" value={formData.material} onChange={handleInputChange('material')} placeholder="Ej: Cemento rápido, Tubo PVC 110mm..." autoFocus />
+                <label>¿Qué se necesita? *</label>
+                <textarea
+                  value={formData.descripcion}
+                  onChange={handleInputChange('descripcion')}
+                  rows="6"
+                  placeholder="Ej: 10 sacos de cemento + 2 cubos de pintura blanca"
+                  autoFocus
+                  style={{ resize: 'vertical' }}
+                />
               </div>
-              <div className="form-group half-width">
-                <label>Cantidad y Unidad</label>
-                <input type="text" value={formData.cantidad} onChange={handleInputChange('cantidad')} placeholder="Ej: 10 sacos, 5 metros..." />
-              </div>
-              <div className="form-group half-width">
-                <label>Para Cuándo (Fecha límite)</label>
-                <input type="date" value={formData.fechaNecesidad} onChange={handleInputChange('fechaNecesidad')} />
-              </div>
+
+              {/* Prioridad */}
               <div className="form-group full-width">
-                <label>Para qué Obra</label>
+                <label>Prioridad</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  {[
+                    { value: 'no_urgente', label: 'No urgente', sub: 'Entrega en 1–3 días', color: '#64748b', bg: '#f1f5f9', border: '#cbd5e1', selBg: '#f1f5f9', selBorder: '#64748b' },
+                    { value: 'urgente', label: '⚡ Urgente', sub: 'Entrega mañana', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', selBg: '#fef2f2', selBorder: '#dc2626' },
+                  ].map(opt => {
+                    const selected = formData.prioridad === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, prioridad: opt.value })}
+                        style={{
+                          flex: 1, padding: '12px', borderRadius: '8px', cursor: 'pointer', textAlign: 'left',
+                          border: `2px solid ${selected ? opt.color : opt.border}`,
+                          background: selected ? opt.selBg : '#fff',
+                          outline: 'none',
+                        }}
+                      >
+                        <div style={{ fontWeight: 700, fontSize: '13px', color: selected ? opt.color : 'var(--text-main)' }}>{opt.label}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{opt.sub}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Obra */}
+              <div className="form-group full-width">
+                <label>Para qué obra</label>
                 <select value={formData.obraId} onChange={handleInputChange('obraId')}>
                   <option value="">Almacén Central (Uso general)</option>
                   {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
                 </select>
               </div>
-              <div className="form-group half-width">
-                <label>A quién se le solicita</label>
-                <input type="text" value={formData.asignadoA} onChange={handleInputChange('asignadoA')} placeholder="Nombre del responsable / proveedor" />
-              </div>
-              <div className="form-group half-width">
-                <label>Estado actual</label>
-                <select value={formData.estado} onChange={handleInputChange('estado')}>
-                  <option value="pendiente">Pendiente de revisar</option>
-                  <option value="en_proceso">Pedido en proceso / Comprando</option>
-                  <option value="entregado">Entregado en obra</option>
-                  <option value="cancelado">Cancelado</option>
+
+              {/* Trabajador solicitante */}
+              <div className="form-group full-width">
+                <label>Trabajador solicitante *</label>
+                <select value={formData.trabajadorId} onChange={handleInputChange('trabajadorId')}>
+                  <option value="">Seleccionar trabajador...</option>
+                  {trabajadores.map(t => (
+                    <option key={t.id} value={t.id}>{t.nombre} {t.apellidos || ''}</option>
+                  ))}
                 </select>
               </div>
+
+              {/* Notas opcionales */}
               <div className="form-group full-width">
-                <label>Notas / Urgencia</label>
-                <textarea value={formData.notas} onChange={handleInputChange('notas')} rows="2" placeholder="Información extra o motivo..." />
+                <label>Notas adicionales <span style={{ fontWeight: 400, color: '#94a3b8' }}>(opcional)</span></label>
+                <textarea
+                  value={formData.notas}
+                  onChange={handleInputChange('notas')}
+                  rows="2"
+                  placeholder="Aclaraciones, marca específica, referencia..."
+                  style={{ resize: 'none' }}
+                />
               </div>
+
+              {/* Albarán */}
               <div className="form-group full-width">
-                <label>Adjuntar Albarán / Factura (PDF o imagen)</label>
+                <label>Adjuntar albarán / factura <span style={{ fontWeight: 400, color: '#94a3b8' }}>(opcional)</span></label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: '#f1f5f9', border: '1px dashed #cbd5e1', borderRadius: '8px', cursor: isUploading ? 'not-allowed' : 'pointer', fontSize: '12px', color: '#64748b' }}>
                     <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} onChange={handleAlbaranUpload} disabled={isUploading} />
@@ -222,6 +390,7 @@ export default function Pedidos({ data, setData }) {
                   )}
                 </div>
               </div>
+
             </div>
             <div className="modal-footer">
               <button className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>

@@ -143,8 +143,8 @@ export default function Almacen({ data, setData }) {
                     <div style={{ fontSize: '12px', color: '#2563eb', fontWeight: 500, marginTop: '2px' }}>{m.cantidad}</div>
                   </td>
                   {filterObra === 'todas' && (
-                    <td style={{ fontSize: '12px', fontWeight: 500 }}>
-                      <span style={{ background: m.obraId ? '#e0e7ff' : '#f1f5f9', color: m.obraId ? '#3730a3' : '#475569', padding: '4px 8px', borderRadius: '6px' }}>
+                    <td style={{ fontSize: '12px', fontWeight: 500, maxWidth: '200px' }}>
+                      <span style={{ background: m.obraId ? '#e0e7ff' : '#f1f5f9', color: m.obraId ? '#3730a3' : '#475569', padding: '4px 8px', borderRadius: '6px', display: 'inline-block', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.4' }}>
                         {getObraName(m.obraId)}
                       </span>
                     </td>

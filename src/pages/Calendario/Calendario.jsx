@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalIcon, MapPin, Clock, RefreshCw, X } from 'lucide-react';
 import { auth, firebase } from '../../config/firebase';
-import { saveDoc, deleteDoc } from '../../services/db';
+import { saveDoc, deleteDoc, updateDoc } from '../../services/db';
 import { sendEmail } from '../../utils/sendUtils';
 
 export default function Calendario({ data, setData }) {
@@ -49,6 +49,21 @@ export default function Calendario({ data, setData }) {
 
   // ─── Google Calendar Sync ─────────────────────────────
 
+  const GCAL_EVENTS_URL = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+
+  const calcEndTime = (date, time) => {
+    const t = (time && time !== 'Todo el día') ? time : '10:00';
+    const h = parseInt(t.split(':')[0]) + 1;
+    const m = t.split(':')[1] || '00';
+    return `${date}T${String(h).padStart(2, '0')}:${m}:00`;
+  };
+
+  const clearGcalToken = (expired = false) => {
+    setGcalToken(null);
+    localStorage.removeItem('gcal_token');
+    if (expired) alert('La sesión de Google Calendar ha expirado. Vuelve a hacer clic en "Vincular Google Calendar" para reconectar.');
+  };
+
   const handleGoogleSync = async () => {
     try {
       setIsSyncing(true);
@@ -63,11 +78,35 @@ export default function Calendario({ data, setData }) {
       if (token) {
         localStorage.setItem('gcal_token', token);
         setGcalToken(token);
+
+        // Importar eventos de GCal → Firestore
         await loadGoogleEvents(token);
+
+        // Push de eventos locales existentes → GCal
+        const localEvents = eventos.filter(e => e.type !== 'gcal' && !e.googleEventId);
+        for (const evt of localEvents) {
+          try {
+            const gcalEvt = {
+              summary: evt.title,
+              location: evt.location || '',
+              start: { dateTime: `${evt.date}T${(evt.time && evt.time !== 'Todo el día') ? evt.time : '10:00'}:00`, timeZone: 'Europe/Madrid' },
+              end: { dateTime: calcEndTime(evt.date, evt.time), timeZone: 'Europe/Madrid' },
+            };
+            const res = await fetch(GCAL_EVENTS_URL, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(gcalEvt)
+            });
+            if (res.ok) {
+              const created = await res.json();
+              await updateDoc('eventos', evt.id, { googleEventId: created.id });
+            }
+          } catch (_) {}
+        }
       }
     } catch (error) {
       console.error("Error OAuth Sync:", error);
-      alert("Para activar la sincronización, Google requiere que configures el ID de Cliente OAuth en tu consola Firebase/GCP y uses el modo producción (Sin Emuladores Locales).");
+      alert("Para activar la sincronización, Google requiere que configures el ID de Cliente OAuth en tu consola Firebase/GCP y uses el modo producción (sin emuladores locales).");
     } finally {
       setIsSyncing(false);
     }
@@ -78,37 +117,39 @@ export default function Calendario({ data, setData }) {
     try {
       setIsSyncing(true);
 
-      const startD = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString();
-      const endD = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59).toISOString();
+      // Rango extendido: mes anterior + actual + siguiente
+      const startD = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1).toISOString();
+      const endD = new Date(currentDate.getFullYear(), currentDate.getMonth() + 2, 0, 23, 59, 59).toISOString();
 
-      const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${startD}&timeMax=${endD}&singleEvents=true&orderBy=startTime`, {
+      const res = await fetch(`${GCAL_EVENTS_URL}?timeMin=${startD}&timeMax=${endD}&singleEvents=true&orderBy=startTime`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      if(!res.ok) throw new Error("Token caducado o inválido");
+      if (!res.ok) {
+        clearGcalToken(true);
+        return;
+      }
 
       const gcalData = await res.json();
-      const mappedEvents = gcalData.items.map(i => ({
+      const mappedEvents = (gcalData.items || []).map(i => ({
         id: 'gcal-' + i.id,
         title: i.summary || '(Sin título)',
         date: i.start.dateTime ? i.start.dateTime.split('T')[0] : i.start.date,
-        time: i.start.dateTime ? new Date(i.start.dateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Todo el día',
+        time: i.start.dateTime ? new Date(i.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Todo el día',
         location: i.location || '',
         type: 'gcal',
         googleEventId: i.id
       }));
 
-      // Guardar eventos de GCal en Firestore (merge con existentes)
       for (const evt of mappedEvents) {
         const existing = eventos.find(e => e.googleEventId === evt.googleEventId);
         if (!existing) {
           await saveDoc('eventos', evt.id, evt);
         }
       }
-    } catch(err) {
+    } catch (err) {
       console.error(err);
-      setGcalToken(null);
-      localStorage.removeItem('gcal_token');
+      clearGcalToken(false);
     } finally {
       setIsSyncing(false);
     }
@@ -168,17 +209,23 @@ export default function Calendario({ data, setData }) {
     if (gcalToken) {
       const gcalEvt = {
         summary: newEvent.title,
-        location: newEvent.location,
-        start: { dateTime: `${newEvent.date}T${newEvent.time}:00+01:00`, timeZone: 'Europe/Madrid' },
-        end: { dateTime: `${newEvent.date}T${String(parseInt(newEvent.time.split(':')[0]) + 1).padStart(2,'0')}:${newEvent.time.split(':')[1]}:00+01:00`, timeZone: 'Europe/Madrid' },
+        location: newEvent.location || '',
+        start: { dateTime: `${newEvent.date}T${newEvent.time}:00`, timeZone: 'Europe/Madrid' },
+        end: { dateTime: calcEndTime(newEvent.date, newEvent.time), timeZone: 'Europe/Madrid' },
       };
       try {
-        await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events`, {
+        const res = await fetch(GCAL_EVENTS_URL, {
           method: 'POST',
           headers: { Authorization: `Bearer ${gcalToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(gcalEvt)
         });
-      } catch(err) {
+        if (res.ok) {
+          const created = await res.json();
+          await updateDoc('eventos', eventId, { googleEventId: created.id });
+        } else {
+          clearGcalToken(true);
+        }
+      } catch (err) {
         console.error("No se pudo crear evento en GCal", err);
       }
     }
@@ -186,6 +233,15 @@ export default function Calendario({ data, setData }) {
 
   const handleDeleteEvent = async (eventId) => {
     if (!window.confirm('¿Eliminar evento?')) return;
+    const evt = eventos.find(e => e.id === eventId);
+    if (gcalToken && evt?.googleEventId) {
+      try {
+        await fetch(`${GCAL_EVENTS_URL}/${evt.googleEventId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${gcalToken}` }
+        });
+      } catch (_) {}
+    }
     await deleteDoc('eventos', eventId);
   };
 
@@ -205,9 +261,10 @@ export default function Calendario({ data, setData }) {
           <p className="page-subtitle">Sincronizado vía Google Calendar API.</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="btn-secondary" onClick={handleGoogleSync} disabled={isSyncing} style={{ background: isSyncing ? '#f1f5f9' : '#fff' }}>
-            {isSyncing ? <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={16} />}
-            {gcalToken ? 'Sincronizado' : 'Vincular Google'}
+          <button className="btn-secondary" onClick={handleGoogleSync} disabled={isSyncing}
+            style={{ background: isSyncing ? '#f1f5f9' : gcalToken ? '#f0fdf4' : '#fff', color: gcalToken ? '#16a34a' : undefined, borderColor: gcalToken ? '#86efac' : undefined }}>
+            <RefreshCw size={16} style={isSyncing ? { animation: 'spin 1s linear infinite' } : undefined} />
+            {isSyncing ? 'Sincronizando…' : gcalToken ? '✓ Google Calendar vinculado' : 'Vincular Google Calendar'}
           </button>
           <button className="btn-primary" onClick={() => setShowEventModal(true)}>
             <Plus size={16} /> Crear Evento

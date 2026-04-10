@@ -8,7 +8,7 @@ export default function Trabajadores({ data, setData }) {
   const [horasForm, setHorasForm] = useState({ trabajador: '', fecha: new Date().toISOString().split('T')[0], horas: '', concepto: '', obraId: '' });
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ nombre: '', apellidos: '', rol: '', telefono: '', dni: '', comentarios: '' });
+  const [formData, setFormData] = useState({ nombre: '', apellidos: '', rol: '', email: '', telefono: '', dni: '', comentarios: '' });
   const [editingId, setEditingId] = useState(null);
 
   const trabajadores = data?.trabajadores || [];
@@ -51,7 +51,7 @@ export default function Trabajadores({ data, setData }) {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '16px', margin: 0 }}>Plantilla ({trabajadores.length})</h3>
-            <button className="btn-primary" onClick={() => { setFormData({ nombre: '', apellidos: '', rol: '', telefono: '', dni: '', comentarios: '' }); setEditingId(null); setIsModalOpen(true); }}>
+            <button className="btn-primary" onClick={() => { setFormData({ nombre: '', apellidos: '', rol: '', email: '', telefono: '', dni: '', comentarios: '' }); setEditingId(null); setIsModalOpen(true); }}>
               <UserPlus size={16} /> Añadir Trabajador
             </button>
           </div>
@@ -65,15 +65,18 @@ export default function Trabajadores({ data, setData }) {
                   <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '15px' }}>{t.nombre} {t.apellidos || ''}</div>
                   <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px' }}>{t.rol || 'Operario'}</div>
                   {t.comentarios && <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', fontStyle: 'italic' }}>{t.comentarios}</div>}
-                  {(t.telefono || t.dni) && (
-                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      {t.telefono && (
-                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                          <span>📞 {t.telefono}</span>
-                          <a href={`https://wa.me/34${t.telefono.replace(/\D/g,'')}?text=${encodeURIComponent('Hola '+t.nombre+', ')}`} target="_blank" rel="noreferrer" style={{ background: '#25D366', color: '#fff', padding: '2px 6px', borderRadius: '8px', textDecoration: 'none', fontSize: '10px', fontWeight: 600 }}>WA</a>
-                        </div>
-                      )}
-                      {t.dni && <span>🆔 {t.dni}</span>}
+                  {(t.telefono || t.dni || t.email) && (
+                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {t.telefono && (
+                          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                            <span>📞 {t.telefono}</span>
+                            <a href={`https://wa.me/34${t.telefono.replace(/\D/g,'')}?text=${encodeURIComponent('Hola '+t.nombre+', ')}`} target="_blank" rel="noreferrer" style={{ background: '#25D366', color: '#fff', padding: '2px 6px', borderRadius: '8px', textDecoration: 'none', fontSize: '10px', fontWeight: 600 }}>WA</a>
+                          </div>
+                        )}
+                        {t.dni && <span>🆔 {t.dni}</span>}
+                      </div>
+                      {t.email && <span>✉️ {t.email}</span>}
                     </div>
                   )}
                 </div>
@@ -233,6 +236,10 @@ export default function Trabajadores({ data, setData }) {
               <div className="form-group full-width">
                 <label>Rol / Cargo (Ej: Oficial 1ª, Jefe de Obra)</label>
                 <input type="text" value={formData.rol} onChange={e => setFormData({...formData, rol: e.target.value})} />
+              </div>
+              <div className="form-group half-width">
+                <label>Email</label>
+                <input type="email" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
               </div>
               <div className="form-group half-width">
                 <label>Teléfono</label>

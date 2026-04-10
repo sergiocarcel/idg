@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Plus, Edit2, Trash2, X, FolderOpen, Calendar, MapPin, User, Users } from 'lucide-react';
 import { saveDoc, deleteDoc, updateDoc } from '../../services/db';
-import { generatePresupuestoPdf } from '../../utils/pdfUtils';
+import { generatePdfFromElement } from '../../utils/pdfUtils';
+import PresupuestoPrint from '../Presupuestos/PresupuestoPrint.jsx';
 import Gantt from './Gantt.jsx';
 import CarpetaObra from './CarpetaObra.jsx';
 import ActasModificacion from './ActasModificacion.jsx';
@@ -15,6 +16,8 @@ export default function Obras({ data, setData }) {
   const [carpetaObra, setCarpetaObra] = useState(null);
   const [actasObra, setActasObra] = useState(null);
   const [colabObra, setColabObra] = useState(null);
+  const [previewPpto, setPreviewPpto] = useState(null); // { ppto, obraId, previousPresupuestoId, savedArchivos }
+  const previewRef = useRef(null);
 
   const initialForm = {
     nombre: '', clienteId: '', direccion: '', inicio: '', fin: '',
@@ -43,41 +46,47 @@ export default function Obras({ data, setData }) {
     const savedArchivos = formData.archivos || [];
 
     await saveDoc('obras', docId, { ...formData, id: docId });
-    setIsModalOpen(false); // Cerrar modal antes de generar PDF para evitar interferencias CSS
+    setIsModalOpen(false);
 
-    // Si se acaba de vincular un presupuesto (nuevo o cambiado), generar PDF dirección
     if (formData.presupuestoId && formData.presupuestoId !== previousPresupuestoId) {
       const ppto = presupuestos.find(p => p.id === formData.presupuestoId);
       if (ppto) {
-        try {
-          const { blob } = await generatePresupuestoPdf(ppto, data, 'direccion');
-          const fd = new FormData();
-          fd.append('file', blob, `Presupuesto_${ppto.id}_Direccion.pdf`);
-          fd.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
-          fd.append('folder', `obras/${docId}`);
-          const uploaded = await fetch(
-            `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`,
-            { method: 'POST', body: fd }
-          ).then(r => r.json());
-          if (!uploaded.error) {
-            const newFile = {
-              id: Date.now().toString(),
-              name: `Presupuesto_${ppto.id}_Direccion.pdf`,
-              url: uploaded.secure_url,
-              type: 'document',
-              size: blob.size,
-              date: new Date().toISOString()
-            };
-            // Eliminar PDF del presupuesto anterior si existía
-            const archivosSinAnterior = savedArchivos.filter(
-              f => f.name !== `Presupuesto_${previousPresupuestoId}_Direccion.pdf`
-            );
-            await updateDoc('obras', docId, { archivos: [newFile, ...archivosSinAnterior] });
-          }
-        } catch (_) {
-          // No bloquear el guardado si falla la generación del PDF
-        }
+        setPreviewPpto({ ppto, obraId: docId, previousPresupuestoId, savedArchivos });
       }
+    }
+  };
+
+  const handleConfirmPreview = async () => {
+    const { ppto, obraId, previousPresupuestoId, savedArchivos } = previewPpto;
+    try {
+      const printEl = previewRef.current?.querySelector('.print-container') || previewRef.current;
+      const { blob } = await generatePdfFromElement(printEl, `Presupuesto_${ppto.id}_Direccion.pdf`);
+      setPreviewPpto(null);
+      const fd = new FormData();
+      fd.append('file', blob, `Presupuesto_${ppto.id}_Direccion.pdf`);
+      fd.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+      fd.append('folder', `obras/${obraId}`);
+      const uploaded = await fetch(
+        `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`,
+        { method: 'POST', body: fd }
+      ).then(r => r.json());
+      if (!uploaded.error) {
+        const newFile = {
+          id: Date.now().toString(),
+          name: `Presupuesto_${ppto.id}_Direccion.pdf`,
+          url: uploaded.secure_url,
+          type: 'document',
+          size: blob.size,
+          date: new Date().toISOString()
+        };
+        const archivosSinAnterior = savedArchivos.filter(
+          f => f.name !== `Presupuesto_${previousPresupuestoId}_Direccion.pdf`
+        );
+        await updateDoc('obras', obraId, { archivos: [newFile, ...archivosSinAnterior] });
+      }
+    } catch (err) {
+      console.error('Error generando PDF:', err);
+      setPreviewPpto(null);
     }
   };
 
@@ -114,6 +123,26 @@ export default function Obras({ data, setData }) {
 
   return (
     <div className="page-container">
+      {previewPpto && (
+        <div className="modal-overlay" style={{ zIndex: 150 }}>
+          <div style={{ background: '#fff', borderRadius: '12px', width: '92vw', maxWidth: '880px', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '15px' }}>Vista previa — {previewPpto.ppto.id}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Presupuesto de dirección a asociar con la obra</div>
+              </div>
+              <button className="icon-btn" onClick={() => setPreviewPpto(null)}><X size={18} /></button>
+            </div>
+            <div ref={previewRef} style={{ flex: 1, overflowY: 'auto', background: '#f1f5f9' }}>
+              <PresupuestoPrint ppto={previewPpto.ppto} data={data} mode="direccion" printOnMount={false} onClose={() => setPreviewPpto(null)} />
+            </div>
+            <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: '8px', justifyContent: 'flex-end', flexShrink: 0 }}>
+              <button className="btn-secondary" onClick={() => setPreviewPpto(null)}>Cancelar</button>
+              <button className="btn-primary" onClick={handleConfirmPreview}>Asociar presupuesto</button>
+            </div>
+          </div>
+        </div>
+      )}
       <header className="page-header">
         <div>
           <h1 className="page-title">Obras y Proyectos</h1>
@@ -342,7 +371,7 @@ export default function Obras({ data, setData }) {
 
       {/* Modal Carpeta Obra (Firebase Storage) */}
       {carpetaObra && (
-        <CarpetaObra obra={carpetaObra} data={data} setData={setData} onClose={() => setCarpetaObra(null)} />
+        <CarpetaObra obra={obras.find(o => o.id === carpetaObra.id) || carpetaObra} data={data} setData={setData} onClose={() => setCarpetaObra(null)} />
       )}
 
       {actasObra && (
