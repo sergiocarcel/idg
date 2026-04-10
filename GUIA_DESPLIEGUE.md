@@ -194,6 +194,11 @@ VITE_EMAILJS_TEMPLATE_PORTAL=template_xxxxxxx
 # FIRMA.DEV — Obtener del Paso 7
 # ═══════════════════════════════════════════════
 VITE_FIRMADEV_API_KEY=fdk_xxxxxxxxxxxxxxxxxxxxxxxx
+
+# ═══════════════════════════════════════════════
+# GOOGLE CALENDAR — Obtener del Paso 10 (Opcional)
+# ═══════════════════════════════════════════════
+VITE_GOOGLE_OAUTH_CLIENT_ID=XXXXXXXXX.apps.googleusercontent.com
 ```
 
 > 🔒 Este archivo **NUNCA** se sube al repositorio (está en `.gitignore`). Cada entorno (dev, producción, otro cliente) tiene su propio `.env`.
@@ -229,39 +234,57 @@ Tras ~30 segundos, la web estará disponible en:
 
 ## 10. Configurar Google Calendar (Opcional)
 
-Esta integración permite a los empleados sincronizar su calendario de Google con el CRM (bidireccional). **Es opcional** — sin ella, el calendario del CRM funciona de forma local.
+Esta integración permite a los empleados sincronizar su Google Calendar con el CRM (bidireccional). **Es opcional** — sin ella, el calendario del CRM funciona de forma local. **Coste: 0 €.**
 
-### Paso 1: Habilitar la API de Calendar en Google Cloud
-1. Ir a [console.cloud.google.com](https://console.cloud.google.com) con la cuenta del proyecto
-2. Comprobar que arriba a la izquierda está seleccionado el proyecto correcto (mismo que en Firebase)
+> ℹ️ La integración usa **Google Identity Services (GIS)**, completamente separado de Firebase Auth. Vincular el calendario NO afecta la sesión ni el rol del usuario en el CRM.
+
+### Paso 1: Habilitar la Google Calendar API
+1. Ir a [console.cloud.google.com](https://console.cloud.google.com)
+2. Comprobar que arriba a la izquierda está seleccionado el **proyecto correcto** (el mismo que Firebase, ej: `idg-crm`)
 3. Menú lateral → **APIs y Servicios** → **Biblioteca**
 4. Buscar **"Google Calendar API"** → clic → pulsar **"Habilitar"**
 
 ### Paso 2: Configurar la Pantalla de Consentimiento OAuth
 1. Menú lateral → **APIs y Servicios** → **Pantalla de consentimiento de OAuth**
-2. Elegir tipo:
-   - **"Interno"** si la empresa usa Google Workspace (solo emails corporativos pueden vincular)
-   - **"Externo"** si usan cuentas @gmail normales
+2. Elegir tipo de usuario:
+   - **"Interno"** si la empresa usa Google Workspace (solo emails del dominio corporativo)
+   - **"Externo"** si usan cuentas @gmail normales ← lo más habitual
 3. Rellenar campos obligatorios:
    - **Nombre de la aplicación:** `CRM [Nombre Empresa]`
-   - **Email de asistencia:** email del administrador
+   - **Email de asistencia al usuario:** email del administrador
    - **Dominios autorizados:** `tu-proyecto.web.app`
-4. En **Scopes (Permisos)** → "Añadir o quitar scopes" → añadir:
-   - `https://www.googleapis.com/auth/calendar.readonly`
-   - `https://www.googleapis.com/auth/calendar.events`
-5. Guardar y continuar
+   - **Información de contacto del desarrollador:** email del administrador
+4. Pulsar **Guardar y continuar** (los Scopes se gestionan solos desde el código, no hace falta añadirlos aquí)
+5. En la pantalla de **"Estado de publicación"**: pulsar **"Publicar aplicación"**
+   - Esto permite que **cualquier cuenta de Google** pueda vincular su calendario, sin necesidad de añadirla como usuario de prueba
+   - Es gratuito y no requiere verificación adicional para el scope de Calendar
 
-### Paso 3: Habilitar Google como proveedor en Firebase Auth
-1. [console.firebase.google.com](https://console.firebase.google.com) → tu proyecto
-2. **Authentication** → **Sign-in method** → proveedor **"Google"** → Activar → Guardar
+### Paso 3: Crear la Credencial OAuth 2.0
+1. Menú lateral → **APIs y Servicios** → **Credenciales**
+2. Pulsar **"+ Crear credenciales"** → **"ID de cliente de OAuth 2.0"**
+3. Tipo de aplicación: **"Aplicación web"**
+4. Nombre: `CRM Web` (o el que quieras)
+5. En **"Orígenes de JavaScript autorizados"**, añadir:
+   - `http://localhost:5173` (para desarrollo local)
+   - `https://tu-proyecto.web.app` (producción — sin barra final)
+6. Pulsar **Crear**
+7. Copiar el **ID de cliente** — tiene el formato `XXXXXXXXX.apps.googleusercontent.com`
+
+### Paso 4: Añadir al .env
+```env
+VITE_GOOGLE_OAUTH_CLIENT_ID=XXXXXXXXX.apps.googleusercontent.com
+```
+
+Tras añadirlo, hacer un nuevo build y desplegar (paso 9).
 
 ### Uso por cada empleado
-1. El empleado entra al CRM → pestaña **"Calendario"**
-2. Pulsa **"Vincular Google"** → acepta los permisos
-3. Sus eventos de Google Calendar aparecen automáticamente en el CRM
-4. Los eventos creados desde el CRM se sincronizan a su móvil
+1. El empleado entra al CRM → pestaña **Calendario**
+2. Pulsa **"Vincular Google Calendar"** → aparece el selector de cuenta de Google → acepta los permisos
+3. Sus eventos de Google Calendar aparecen en el CRM automáticamente
+4. Los eventos creados desde el CRM se sincronizan a Google Calendar
+5. El token se renueva automáticamente sin pedirle nada al usuario
 
-> ⚠️ La vinculación solo funciona desde la URL de producción (`https://...web.app`), NO en localhost.
+> ℹ️ Funciona tanto en localhost (desarrollo) como en producción, en cualquier navegador y dispositivo.
 
 ---
 
@@ -376,15 +399,16 @@ firebase login
 ### Flujo completo para un nuevo cliente
 
 ```
-1. Crear proyecto Firebase nuevo  →  obtener VITE_FIREBASE_*
-2. Crear cuenta Cloudinary nueva  →  obtener VITE_CLOUDINARY_*
-3. Crear cuenta (o reusar) EmailJS →  obtener VITE_EMAILJS_*
-4. Crear cuenta firma.dev nueva   →  obtener VITE_FIRMADEV_API_KEY
-5. Actualizar .env con todas las claves nuevas
-6. npm run build
-7. firebase login  (si es otra cuenta Google)
-8. firebase use --add  (seleccionar el nuevo proyecto)
-9. firebase deploy --only firestore,hosting
+1. Crear proyecto Firebase nuevo        →  obtener VITE_FIREBASE_*
+2. Crear cuenta Cloudinary nueva        →  obtener VITE_CLOUDINARY_*
+3. Crear cuenta (o reusar) EmailJS      →  obtener VITE_EMAILJS_*
+4. Crear cuenta firma.dev nueva         →  obtener VITE_FIRMADEV_API_KEY
+5. (Opcional) Configurar Google Calendar →  obtener VITE_GOOGLE_OAUTH_CLIENT_ID (Paso 10)
+6. Actualizar .env con todas las claves nuevas
+7. npm run build
+8. firebase login  (si es otra cuenta Google)
+9. firebase use --add  (seleccionar el nuevo proyecto)
+10. firebase deploy --only firestore,hosting
 ```
 
 ---

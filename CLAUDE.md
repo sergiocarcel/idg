@@ -105,6 +105,7 @@ VITE_EMAILJS_SERVICE_ID
 VITE_EMAILJS_PUBLIC_KEY
 VITE_EMAILJS_TEMPLATE_PORTAL        # template_vecke19 — used for all emails (portal access + presupuestos)
 VITE_FIRMADEV_API_KEY               # firma.dev workspace API key (~0.029€/envelope)
+VITE_GOOGLE_OAUTH_CLIENT_ID         # OAuth 2.0 Client ID (tipo Web) de Google Cloud Console — usado por Calendario.jsx para Google Calendar via GIS (NO usa Firebase Auth signInWithPopup)
 ```
 
 ## Firestore Collections

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalIcon, MapPin, Clock, RefreshCw, X } from 'lucide-react';
-import { auth, firebase } from '../../config/firebase';
+import { auth } from '../../config/firebase';
 import { saveDoc, deleteDoc, updateDoc } from '../../services/db';
 import { sendEmail } from '../../utils/sendUtils';
 
@@ -11,6 +11,11 @@ export default function Calendario({ data, setData }) {
   const eventos = data?.eventos || [];
 
   const [gcalToken, setGcalToken] = useState(localStorage.getItem('gcal_token'));
+  const [gcalExpiresAt, setGcalExpiresAt] = useState(() => {
+    const s = localStorage.getItem('gcal_token_expires');
+    return s ? Number(s) : null;
+  });
+  const tokenClientRef = useRef(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Modal State for New Event
@@ -60,24 +65,40 @@ export default function Calendario({ data, setData }) {
 
   const clearGcalToken = (expired = false) => {
     setGcalToken(null);
+    setGcalExpiresAt(null);
     localStorage.removeItem('gcal_token');
+    localStorage.removeItem('gcal_token_expires');
+    tokenClientRef.current = null;
     if (expired) alert('La sesión de Google Calendar ha expirado. Vuelve a hacer clic en "Vincular Google Calendar" para reconectar.');
   };
 
-  const handleGoogleSync = async () => {
-    try {
-      setIsSyncing(true);
-      const provider = new firebase.auth.GoogleAuthProvider();
-      provider.addScope('https://www.googleapis.com/auth/calendar.readonly');
-      provider.addScope('https://www.googleapis.com/auth/calendar.events');
-
-      const result = await auth.signInWithPopup(provider);
-      const credential = result.credential || firebase.auth.GoogleAuthProvider.credentialFromResult(result);
-      const token = credential?.accessToken;
-
-      if (token) {
+  const handleGoogleSync = () => {
+    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+    if (!clientId) {
+      alert('Falta VITE_GOOGLE_OAUTH_CLIENT_ID en el .env. Consulta GUIA_DESPLIEGUE.md para configurarlo.');
+      return;
+    }
+    if (!window.google?.accounts?.oauth2) {
+      alert('El script de Google Identity Services no ha cargado todavía. Refresca la página e inténtalo de nuevo.');
+      return;
+    }
+    setIsSyncing(true);
+    const isReconnect = !!gcalToken;
+    const client = window.google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: 'https://www.googleapis.com/auth/calendar',
+      callback: async (tokenResponse) => {
+        if (tokenResponse.error) {
+          console.error('GIS error:', tokenResponse);
+          setIsSyncing(false);
+          return;
+        }
+        const token = tokenResponse.access_token;
+        const expiresAt = Date.now() + (tokenResponse.expires_in - 60) * 1000;
         localStorage.setItem('gcal_token', token);
+        localStorage.setItem('gcal_token_expires', String(expiresAt));
         setGcalToken(token);
+        setGcalExpiresAt(expiresAt);
 
         // Importar eventos de GCal → Firestore
         await loadGoogleEvents(token);
@@ -103,13 +124,12 @@ export default function Calendario({ data, setData }) {
             }
           } catch (_) {}
         }
+        setIsSyncing(false);
       }
-    } catch (error) {
-      console.error("Error OAuth Sync:", error);
-      alert("Para activar la sincronización, Google requiere que configures el ID de Cliente OAuth en tu consola Firebase/GCP y uses el modo producción (sin emuladores locales).");
-    } finally {
-      setIsSyncing(false);
-    }
+    });
+    tokenClientRef.current = client;
+    // Primera vez: pedir consentimiento explícito. Reconexión: silencioso.
+    client.requestAccessToken({ prompt: isReconnect ? '' : 'consent' });
   };
 
   const loadGoogleEvents = async (token) => {
@@ -156,7 +176,33 @@ export default function Calendario({ data, setData }) {
   };
 
   useEffect(() => {
-    if (gcalToken) loadGoogleEvents(gcalToken);
+    if (!gcalToken) return;
+    // Si el token ha expirado, intentar refresco silencioso
+    if (!gcalExpiresAt || Date.now() >= gcalExpiresAt) {
+      const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
+      if (!clientId || !window.google?.accounts?.oauth2) {
+        clearGcalToken(true);
+        return;
+      }
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/calendar',
+        callback: (tokenResponse) => {
+          if (tokenResponse.error) { clearGcalToken(true); return; }
+          const token = tokenResponse.access_token;
+          const expiresAt = Date.now() + (tokenResponse.expires_in - 60) * 1000;
+          localStorage.setItem('gcal_token', token);
+          localStorage.setItem('gcal_token_expires', String(expiresAt));
+          setGcalToken(token);
+          setGcalExpiresAt(expiresAt);
+          loadGoogleEvents(token);
+        }
+      });
+      tokenClientRef.current = client;
+      client.requestAccessToken({ prompt: '' });
+      return;
+    }
+    loadGoogleEvents(gcalToken);
   }, [currentDate, gcalToken]);
 
   // ─── CRUD Eventos ─────────────────────────────────────
@@ -205,8 +251,8 @@ export default function Calendario({ data, setData }) {
     setShowEventModal(false);
     setNewEvent({ title: '', date: '', time: '10:00', location: '', type: 'reunion', participantes: [], notificarAntes: 60 });
 
-    // Si GCal está enlazado, crear en Google Calendar también
-    if (gcalToken) {
+    // Si GCal está enlazado y el token es válido, crear en Google Calendar también
+    if (gcalToken && gcalExpiresAt && Date.now() < gcalExpiresAt) {
       const gcalEvt = {
         summary: newEvent.title,
         location: newEvent.location || '',
@@ -223,7 +269,7 @@ export default function Calendario({ data, setData }) {
           const created = await res.json();
           await updateDoc('eventos', eventId, { googleEventId: created.id });
         } else {
-          clearGcalToken(true);
+          console.warn('No se pudo crear el evento en Google Calendar.');
         }
       } catch (err) {
         console.error("No se pudo crear evento en GCal", err);
@@ -234,7 +280,7 @@ export default function Calendario({ data, setData }) {
   const handleDeleteEvent = async (eventId) => {
     if (!window.confirm('¿Eliminar evento?')) return;
     const evt = eventos.find(e => e.id === eventId);
-    if (gcalToken && evt?.googleEventId) {
+    if (gcalToken && gcalExpiresAt && Date.now() < gcalExpiresAt && evt?.googleEventId) {
       try {
         await fetch(`${GCAL_EVENTS_URL}/${evt.googleEventId}`, {
           method: 'DELETE',
