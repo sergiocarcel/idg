@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, FolderOpen, AlertTriangle, FileText, DownloadCloud, Trash2, Send, X, PenTool } from 'lucide-react';
+import { Plus, FolderOpen, AlertTriangle, FileText, DownloadCloud, Trash2, Send, X, PenTool, MessageCircle, Mail } from 'lucide-react';
 import { saveDoc, deleteDoc } from '../../services/db';
-import { openWhatsApp } from '../../utils/sendUtils';
+import { openWhatsApp, sendEmail } from '../../utils/sendUtils';
 import SignatureFlow from '../../components/shared/SignatureFlow.jsx';
 
 export default function RRHH({ data, setData }) {
@@ -11,8 +11,11 @@ export default function RRHH({ data, setData }) {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [signatureDoc, setSignatureDoc] = useState(null);
+  const [sendDocModal, setSendDocModal] = useState(null);
+  const [selectedTrabajadorId, setSelectedTrabajadorId] = useState('');
 
   const documentos = data?.documentosRRHH || [];
+  const trabajadores = data?.trabajadores || [];
 
   const handleInputChange = (field) => (e) => setFormData({ ...formData, [field]: e.target.value });
 
@@ -217,9 +220,9 @@ export default function RRHH({ data, setData }) {
                 <td>
                   <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
                     {d.archivoUrl && (
-                      <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '11px', color: '#16a34a', borderColor: '#bbf7d0', background: '#f0fdf4', display: 'flex', gap: '4px', alignItems: 'center' }}
-                        onClick={() => openWhatsApp('', `Documento: ${d.nombre}\nDescarga: ${d.archivoUrl}`)}>
-                        <Send size={12} /> WhatsApp
+                      <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '11px', color: '#3b82f6', borderColor: '#bfdbfe', background: '#eff6ff', display: 'flex', gap: '4px', alignItems: 'center' }}
+                        onClick={() => { setSendDocModal(d); setSelectedTrabajadorId(''); }}>
+                        <Send size={12} /> Enviar
                       </button>
                     )}
                     {d.archivoUrl && (
@@ -319,6 +322,82 @@ export default function RRHH({ data, setData }) {
             <div className="modal-footer">
               <button className="btn-secondary" onClick={() => setShowAddCategory(false)}>Cancelar</button>
               <button className="btn-primary" onClick={handleAddCategory}>Crear Carpeta</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Enviar Documento a Trabajador */}
+      {sendDocModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>Enviar Documento</h2>
+              <button className="icon-btn" onClick={() => setSendDocModal(null)} style={{ background: 'none' }}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                Selecciona un trabajador para enviarle el documento <strong>{sendDocModal.nombre}</strong>.
+              </p>
+              <div className="form-group full-width" style={{ marginBottom: '20px' }}>
+                <label>Trabajador</label>
+                <select value={selectedTrabajadorId} onChange={e => setSelectedTrabajadorId(e.target.value)}>
+                  <option value="">Seleccionar trabajador...</option>
+                  {trabajadores.map(t => (
+                    <option key={t.id} value={t.id}>{t.nombre} {t.apellidos || ''}</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedTrabajadorId && (() => {
+                const trabajador = trabajadores.find(t => t.id === selectedTrabajadorId);
+                if (!trabajador) return null;
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <button
+                      className="btn-secondary"
+                      disabled={!trabajador.telefono}
+                      style={{ justifyContent: 'flex-start', gap: '10px', padding: '12px 16px', opacity: trabajador.telefono ? 1 : 0.5, cursor: trabajador.telefono ? 'pointer' : 'not-allowed' }}
+                      onClick={() => {
+                        if (!trabajador.telefono) return;
+                        const msg = `Hola ${trabajador.nombre}, te adjunto el documento "${sendDocModal.nombre}":\n\nPuedes descargarlo aquí: ${sendDocModal.archivoUrl}`;
+                        openWhatsApp(trabajador.telefono, msg);
+                        setSendDocModal(null);
+                      }}
+                    >
+                      <MessageCircle size={16} style={{ color: trabajador.telefono ? '#25D366' : '#94a3b8' }} />
+                      <span>WhatsApp</span>
+                      <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: 'auto' }}>{trabajador.telefono || 'No disponible'}</span>
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      disabled={!trabajador.email}
+                      style={{ justifyContent: 'flex-start', gap: '10px', padding: '12px 16px', opacity: trabajador.email ? 1 : 0.5, cursor: trabajador.email ? 'pointer' : 'not-allowed' }}
+                      onClick={async () => {
+                        if (!trabajador.email) return;
+                        const message = `Hola ${trabajador.nombre},\n\nTe adjunto el documento "${sendDocModal.nombre}".\n\nPuedes acceder a él desde el siguiente enlace:\n${sendDocModal.archivoUrl}\n\nUn saludo.`;
+                        const result = await sendEmail(import.meta.env.VITE_EMAILJS_TEMPLATE_PORTAL, {
+                          to_email: trabajador.email,
+                          to_name: `${trabajador.nombre} ${trabajador.apellidos || ''}`.trim(),
+                          subject: `Documento de recursos humanos: ${sendDocModal.nombre}`,
+                          message,
+                          from_name: 'IDG',
+                        });
+                        if (result.success) {
+                          alert('✅ Email enviado correctamente');
+                          setSendDocModal(null);
+                        } else {
+                          alert('❌ Error al enviar email: ' + (result.error || 'Error desconocido'));
+                        }
+                      }}
+                    >
+                      <Mail size={16} style={{ color: trabajador.email ? '#3b82f6' : '#94a3b8' }} />
+                      <span>Email</span>
+                      <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: 'auto' }}>{trabajador.email || 'No disponible'}</span>
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
