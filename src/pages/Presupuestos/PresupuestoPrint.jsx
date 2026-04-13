@@ -58,21 +58,22 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
         {/* Header Empresa y Cliente */}
         <PdfHeader
           empresa={data?.config?.empresa}
-          rightContent={
+          rightTopContent={
             <>
               <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0, color: mode === 'direccion' ? '#dc2626' : '#2563eb' }}>
                 PRESUPUESTO {mode === 'direccion' ? '(DIRECCIÓN)' : (mode === 'colaboradores' ? '(COLABORADORES)' : '')}
               </h2>
               <div style={{ fontSize: '12px', marginTop: '4px', fontWeight: 'bold' }}>Nº {ppto.id}</div>
               <div style={{ fontSize: '12px', marginTop: '4px' }}>Fecha: {new Date(ppto.fecha).toLocaleDateString()}</div>
-
-              <div style={{ marginTop: '20px', textAlign: 'right', background: '#f8f8f8', padding: '12px', borderRadius: '4px' }}>
-                <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#555', marginBottom: '4px' }}>CLIENTE</div>
-                <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{cliente.nombre || 'Cliente no definido'}</div>
-                <div style={{ fontSize: '12px' }}>{cliente.nif}</div>
-                <div style={{ fontSize: '12px' }}>{cliente.direccion}</div>
-                <div style={{ fontSize: '12px' }}>{cliente.telefono}</div>
-              </div>
+            </>
+          }
+          rightBottomContent={
+            <>
+              <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#555', marginBottom: '4px' }}>CLIENTE</div>
+              <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{cliente.nombre || 'Cliente no definido'}</div>
+              <div style={{ fontSize: '12px', lineHeight: '1.5' }}>{cliente.nif}</div>
+              <div style={{ fontSize: '12px', lineHeight: '1.5' }}>{cliente.direccion}</div>
+              <div style={{ fontSize: '12px', lineHeight: '1.5' }}>{cliente.telefono}</div>
             </>
           }
         />
