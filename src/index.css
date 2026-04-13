@@ -330,7 +330,7 @@ body, html, #root {
 }
 .data-table tbody tr { transition: background-color 0.15s; }
 .data-table tbody tr:hover { background-color: rgba(0,0,0,0.01); }
-.data-table tbody tr.selected-row { background-color: rgba(37, 99, 235, 0.05); }
+.data-table tbody tr.selected-row { background-color: rgba(37, 99, 235, 0.12); box-shadow: inset 3px 0 0 #2563eb; }
 
 /* ── MODALS ── */
 .modal-overlay {

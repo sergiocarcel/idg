@@ -24,7 +24,8 @@ export async function generatePdfFromElement(element, filename) {
         logging: false,
         ignoreElements: (el) => el.classList.contains('no-print')
       },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'] }
     })
     .outputPdf('blob');
   return { blob, filename };
@@ -73,8 +74,9 @@ export async function generatePresupuestoPdf(ppto, data, mode = 'cliente') {
             margin: 10,
             filename: `Presupuesto_${ppto.id}.pdf`,
             image: { type: 'jpeg', quality: 0.95 },
-            html2canvas: { scale: 2, useCORS: true, allowTaint: false, logging: false },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            html2canvas: { scale: 2, useCORS: true, allowTaint: false, logging: false, ignoreElements: (el) => el.classList.contains('no-print') },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['css', 'legacy'] }
           })
           .outputPdf('blob');
 

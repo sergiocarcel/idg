@@ -1,23 +1,30 @@
-import React, { useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import PdfHeader from '../../components/print/PdfHeader.jsx';
 import PdfFooter from '../../components/print/PdfFooter.jsx';
+import { generatePdfFromElement } from '../../utils/pdfUtils.js';
 
 export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente', printOnMount = true, companySignature = null }) {
   // Modes: 'direccion' (all columns), 'cliente' (no unit price, just total), 'colaboradores' (no price, no total)
-  useEffect(() => {
-    if (!printOnMount) return;
-    const timer = setTimeout(() => {
-      window.print();
-    }, 500);
+  const contentRef = useRef(null);
+  const [generating, setGenerating] = useState(false);
 
-    const afterPrint = () => onClose();
-    window.addEventListener('afterprint', afterPrint);
-
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('afterprint', afterPrint);
-    };
-  }, [onClose, printOnMount]);
+  const handleDownloadPdf = async () => {
+    if (!contentRef.current) return;
+    setGenerating(true);
+    try {
+      const { blob, filename } = await generatePdfFromElement(contentRef.current, `Presupuesto_${ppto.id}.pdf`);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+      alert('Error al generar el PDF: ' + err.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   if (!ppto) return null;
 
@@ -45,9 +52,8 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
   const iva = total * 0.21;
   const totalConIva = total + iva;
 
-  return (
-    <div className="print-container" style={{ ...(printOnMount ? { position: 'fixed', inset: 0, zIndex: 9999, overflowY: 'auto' } : { position: 'relative' }), background: 'white' }}>
-      <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px', color: '#000', fontFamily: 'Arial, sans-serif' }}>
+  const docContent = (
+    <div ref={contentRef} style={{ maxWidth: '800px', margin: '0 auto', padding: '40px', color: '#000', fontFamily: 'Arial, sans-serif', background: 'white' }}>
         
         {/* Header Empresa y Cliente */}
         <PdfHeader
@@ -224,10 +230,10 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
           </div>
         )}
 
-        {/* Condiciones / Notas */}
+        {/* Condiciones / Notas — solo en modo cliente */}
         <PdfFooter
           empresa={data?.config?.empresa}
-          extraText={`<strong>Condiciones Generales:</strong><br />${ppto.condicionesPresupuesto || data?.config?.empresa?.condicionesPresupuesto || "Validez operativa del presupuesto: 30 días. Los precios no incluyen licencias ni permisos de obra a menos que se indique explícitamente en una partida."}`}
+          extraText={mode === 'cliente' ? `<strong>Condiciones Generales:</strong><br />${ppto.condicionesPresupuesto || data?.config?.empresa?.condicionesPresupuesto || "Validez operativa del presupuesto: 30 días. Los precios no incluyen licencias ni permisos de obra a menos que se indique explícitamente en una partida."}` : undefined}
         />
 
         {/* Bloque de firmas — solo en modo cliente, siempre en página propia */}
@@ -254,12 +260,39 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
           </div>
         )}
 
-        {/* Footer print helper notice -> not visible on print */}
-        <div className="no-print" style={{ textAlign: 'center', marginTop: '40px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
-          <button onClick={onClose} style={{ padding: '8px 16px', cursor: 'pointer', background: '#e5e7eb', border: 'none', borderRadius: '4px' }}>Cancelar (o esc)</button>
-          <button onClick={() => window.print()} style={{ padding: '8px 16px', cursor: 'pointer', background: '#2563eb', color: 'white', border: 'none', borderRadius: '4px' }}>Imprimir Doc.</button>
+    </div>
+  );
+
+  if (printOnMount) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: '#fff', borderRadius: '12px', width: '92vw', maxWidth: '880px', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+          <div style={{ padding: '16px 24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '15px' }}>Vista previa — {ppto.id}</div>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                {mode === 'direccion' ? 'Versión Dirección (interno)' : mode === 'colaboradores' ? 'Versión Colaboradores' : 'Versión Cliente'}
+              </div>
+            </div>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#6b7280', padding: '4px 8px' }}>✕</button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', background: '#f1f5f9' }}>
+            {docContent}
+          </div>
+          <div style={{ padding: '16px 24px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '8px', justifyContent: 'flex-end', flexShrink: 0 }}>
+            <button onClick={onClose} style={{ padding: '8px 16px', cursor: 'pointer', background: '#e5e7eb', border: 'none', borderRadius: '4px' }}>Cancelar</button>
+            <button onClick={handleDownloadPdf} disabled={generating} style={{ padding: '8px 16px', cursor: generating ? 'default' : 'pointer', background: generating ? '#94a3b8' : '#2563eb', color: 'white', border: 'none', borderRadius: '4px' }}>
+              {generating ? 'Generando PDF...' : 'Descargar PDF'}
+            </button>
+          </div>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="print-container" style={{ position: 'relative', background: 'white' }}>
+      {docContent}
     </div>
   );
 }

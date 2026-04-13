@@ -12,7 +12,7 @@ export default function PdfFooter({ empresa, extraText }) {
   const emp = empresa || {};
 
   return (
-    <div style={{ marginTop: '50px', fontSize: '10px', color: '#666', borderTop: '1px solid #ccc', paddingTop: '16px', lineHeight: '1.5' }}>
+    <div style={{ marginTop: '50px', fontSize: '10px', color: '#666', borderTop: '1px solid #ccc', paddingTop: '16px', lineHeight: '1.5', pageBreakInside: 'auto', breakInside: 'auto' }}>
       {extraText && (
         typeof extraText === 'string'
           ? <div style={{ marginBottom: '8px' }} dangerouslySetInnerHTML={{ __html: extraText }} />

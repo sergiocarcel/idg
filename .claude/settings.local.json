@@ -16,7 +16,12 @@
       "Bash(curl:*)",
       "WebFetch(domain:docs.firma.dev)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(brew install:*)",
+      "Bash(pdftoppm -r 150 \"/Users/sergiocarcel/idg/IDG · Innovate Design Group.pdf\" /tmp/pdf_page)",
+      "Read(//private/tmp/**)",
+      "Bash(convert /tmp/pdf_page-1.ppm /tmp/pdf_page-1.png)",
+      "Bash(sips -s format png /tmp/pdf_page-1.ppm --out /tmp/pdf_page-1.png)"
     ]
   }
 }

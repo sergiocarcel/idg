@@ -315,7 +315,7 @@ export default function Obras({ data, setData }) {
                 <label>Presupuesto</label>
                 <select value={formData.presupuestoId} onChange={handleInputChange('presupuestoId')}>
                   <option value="">Sin presupuesto</option>
-                  {presupuestos.filter(p => p.estado === 'aceptado').map(p => <option key={p.id} value={p.id}>{p.id}</option>)}
+                  {presupuestos.filter(p => p.estado === 'aceptado').map(p => <option key={p.id} value={p.id}>{p.id}{p.etiqueta ? ` — ${p.etiqueta}` : ''}</option>)}
                 </select>
               </div>
               <div className="form-group half-width">

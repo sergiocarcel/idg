@@ -134,7 +134,7 @@ export default function Planificacion({ data, setData }) {
       </div>
 
       {/* Worker chips pool */}
-      <div className="stat-card" style={{ padding: '14px 18px', marginBottom: '20px' }}>
+      <div className="stat-card" style={{ padding: '14px 18px', marginBottom: '20px', position: 'sticky', top: 0, zIndex: 10, background: '#fff' }}>
         <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' }}>Equipo disponible — arrastra al tablero</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           {trabajadores.length === 0 && <span style={{ fontSize: '12px', color: '#94a3b8' }}>No hay trabajadores registrados</span>}

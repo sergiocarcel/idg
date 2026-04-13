@@ -27,6 +27,7 @@ export default function Presupuestos({ data, setData, forceMode }) {
   const [checkingFirma, setCheckingFirma] = useState(null); // ppto.id mientras consulta estado firma
   const [firmaSuccessModal, setFirmaSuccessModal] = useState(null); // { ppto, cliente, signingLink } tras envío
   const [companySignature, setCompanySignature] = useState(null);
+  const [exportingPdf, setExportingPdf] = useState(null); // ppto.id mientras genera PDF export
   const printRef = useRef(null);
 
   // Close dropdown on outside click
@@ -99,6 +100,24 @@ export default function Presupuestos({ data, setData, forceMode }) {
 
   const totalAceptado = presupuestos.filter(p => p.estado === 'aceptado').reduce((sum, p) => sum + calculateTotal(p), 0);
   const totalEnviado = presupuestos.filter(p => p.estado === 'enviado').reduce((sum, p) => sum + calculateTotal(p), 0);
+
+  const handleExportPdf = async (ppto, mode) => {
+    setPdfSelectionModal(null);
+    setExportingPdf(ppto.id);
+    try {
+      const { blob, filename } = await generatePresupuestoPdf(ppto, data, mode);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+      alert('Error al generar el PDF: ' + err.message);
+    } finally {
+      setExportingPdf(null);
+    }
+  };
 
   const openPreview = (ppto, channel) => {
     setOpenMenu(null);
@@ -362,7 +381,10 @@ export default function Presupuestos({ data, setData, forceMode }) {
               const status = getStatusStyle(ppto.estado);
               return (
                 <tr key={ppto.id}>
-                  <td style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--text-muted)' }}>{ppto.id}</td>
+                  <td>
+                    <div style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--text-muted)' }}>{ppto.id}</div>
+                    {ppto.etiqueta && <div style={{ fontSize: '11px', color: 'var(--text-main)', marginTop: '2px', fontWeight: 500 }}>{ppto.etiqueta}</div>}
+                  </td>
                   <td>
                     <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{getClientName(ppto.clienteId)}</div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Ref: {ppto.obraId || 'S/N'}</div>

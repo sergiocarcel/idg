@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalIcon, MapPin, Clock, RefreshCw, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalIcon, MapPin, Clock, RefreshCw, X, Trash2 } from 'lucide-react';
 import { auth } from '../../config/firebase';
 import { saveDoc, deleteDoc, updateDoc } from '../../services/db';
 import { sendEmail } from '../../utils/sendUtils';
@@ -333,13 +333,13 @@ export default function Calendario({ data, setData }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px', marginBottom: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '8px', marginBottom: '8px' }}>
             {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => (
               <div key={d} style={{ textAlign: 'center', fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>{d}</div>
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '8px' }}>
             {blanks.map(b => (
               <div key={`blank-${b}`} style={{ minHeight: '100px', background: '#f8fafc', borderRadius: '8px', opacity: 0.5 }}></div>
             ))}
@@ -349,7 +349,7 @@ export default function Calendario({ data, setData }) {
               const dayEvents = eventos.filter(e => e.date === fullDateStr);
 
               return (
-                <div key={d} onClick={() => { setNewEvent({...newEvent, date: fullDateStr}); setShowEventModal(true); }} style={{ minHeight: '100px', background: '#fff', border: isToday ? '2px solid var(--accent)' : '1px solid var(--border)', borderRadius: '8px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '4px', cursor: 'pointer', transition: 'box-shadow 0.2s' }}>
+                <div key={d} onClick={() => { setNewEvent({...newEvent, date: fullDateStr}); setShowEventModal(true); }} style={{ minHeight: '100px', background: '#fff', border: isToday ? '2px solid var(--accent)' : '1px solid var(--border)', borderRadius: '8px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '4px', cursor: 'pointer', transition: 'box-shadow 0.2s', minWidth: 0, overflow: 'hidden' }}>
                   <div style={{ fontSize: '14px', fontWeight: isToday ? 800 : 500, color: isToday ? 'var(--accent)' : 'var(--text-main)', marginBottom: '4px' }}>
                     {d}
                   </div>
@@ -379,9 +379,15 @@ export default function Calendario({ data, setData }) {
                 <div key={e.id} style={{ padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-main)', marginBottom: '6px' }}>{e.title}</div>
-                    <span style={{ ...getTypeStyle(e.type), padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 700, background: getTypeStyle(e.type).bg, color: getTypeStyle(e.type).color }}>
-                      {e.type?.toUpperCase()}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ ...getTypeStyle(e.type), padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 700, background: getTypeStyle(e.type).bg, color: getTypeStyle(e.type).color }}>
+                        {e.type?.toUpperCase()}
+                      </span>
+                      <button onClick={() => handleDeleteEvent(e.id)} title="Eliminar evento"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '2px', display: 'flex', alignItems: 'center' }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>
                     <Clock size={12} /> {new Date(e.date).toLocaleDateString()} a las {e.time}

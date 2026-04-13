@@ -4,18 +4,18 @@ export const initialData = {
     { id: 'CLI-B', nombre: 'María García', nif: '87654321B', email: 'maria@demo.es', telefono: '611111111', direccion: 'Barcelona', notas: '' }
   ],
   obras: [
-    { id: 'OBR-A', nombre: 'Reforma Integral Cocina', clienteId: 'CLI-A', direccion: 'Calle Larios 45', inicio: '2026-04-01', fin: '2026-04-20', presupuestoId: 'PRE-01', avance: 25, estado: 'en_curso', responsable: 'Carlos O.', color: '#3b82f6', notas: 'Ojo con el tubo de gas.' },
+    { id: 'OBR-A', nombre: 'Reforma Integral Cocina', clienteId: 'CLI-A', direccion: 'Calle Larios 45', inicio: '2026-04-01', fin: '2026-04-20', presupuestoId: '001-26', avance: 25, estado: 'en_curso', responsable: 'Carlos O.', color: '#3b82f6', notas: 'Ojo con el tubo de gas.' },
     { id: 'OBR-B', nombre: 'Baño Principal', clienteId: 'CLI-B', direccion: 'Paseo de Gracia 12', inicio: '2026-05-10', fin: '2026-05-15', presupuestoId: '', avance: 0, estado: 'pendiente', responsable: '', color: '#d97706', notas: '' }
   ],
   presupuestos: [
     {
-      id: 'PRE-01', clienteId: 'CLI-A', obraId: 'OBR-A', fecha: '2026-03-20', estado: 'aceptado', notas: '',
+      id: '001-26', etiqueta: 'Reforma Integral Cocina', clienteId: 'CLI-A', obraId: 'OBR-A', fecha: '2026-03-20', estado: 'aceptado', notas: '',
       capitulos: [
         { id: 'CAP-1', nombre: 'Actuaciones Previas', partidas: [{ id: 'PT-1', descripcion: 'Demolición', cantidad: 1, precioCoste: 500, precioVenta: 800 }] }
       ]
     },
     {
-      id: 'PRE-02', clienteId: 'CLI-B', obraId: 'OBR-B', fecha: '2026-03-24', estado: 'enviado', notas: '',
+      id: '002-26', etiqueta: 'Baño Principal', clienteId: 'CLI-B', obraId: 'OBR-B', fecha: '2026-03-24', estado: 'enviado', notas: '',
       capitulos: [
         { id: 'CAP-1', nombre: 'Baño', partidas: [{ id: 'PT-2', descripcion: 'Alicatado paredes', cantidad: 30, precioCoste: 15, precioVenta: 25 }] }
       ]

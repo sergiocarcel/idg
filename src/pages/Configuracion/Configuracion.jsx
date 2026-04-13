@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Settings, Users, Save, Upload, Plus, Edit2, Shield, UserX, CheckCircle, UploadCloud, Info, Loader2, Trash2 } from 'lucide-react';
 import { saveDoc } from '../../services/db';
 
@@ -6,6 +6,7 @@ export default function Configuracion({ data, setData }) {
   const [activeTab, setActiveTab] = useState('general'); // 'general' o 'usuarios'
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const condicionesEmpresaRef = useRef(null);
 
   const [empresa, setEmpresa] = useState(data?.config?.empresa || {
     nombre: 'Innovate Design Group',
@@ -27,18 +28,11 @@ export default function Configuracion({ data, setData }) {
 
   const handleEmpresaChange = (field) => (e) => setEmpresa({ ...empresa, [field]: e.target.value });
 
-  const wrapCondicionesSelection = (tag) => {
-    const ta = document.getElementById('condiciones-empresa-textarea');
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const val = empresa.condicionesPresupuesto || '';
-    const newVal = val.substring(0, start) + `<${tag}>` + val.substring(start, end) + `</${tag}>` + val.substring(end);
-    setEmpresa(prev => ({ ...prev, condicionesPresupuesto: newVal }));
-    setTimeout(() => {
-      ta.focus();
-      ta.setSelectionRange(start + tag.length + 2, end + tag.length + 2);
-    }, 0);
+  const handleCondicionesFormat = (command) => {
+    document.execCommand(command, false, null);
+    if (condicionesEmpresaRef.current) {
+      setEmpresa(prev => ({ ...prev, condicionesPresupuesto: condicionesEmpresaRef.current.innerHTML }));
+    }
   };
 
   const handleLogoUpload = (e) => {
@@ -233,10 +227,17 @@ export default function Configuracion({ data, setData }) {
               <div className="form-group full-width">
                 <label>Condiciones Generales de Presupuestos (Aparecen al pie del PDF)</label>
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
-                  <button type="button" onClick={() => wrapCondicionesSelection('b')} style={{ padding: '2px 8px', fontWeight: 700, fontSize: '12px', border: '1px solid var(--border)', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}>B</button>
-                  <button type="button" onClick={() => wrapCondicionesSelection('i')} style={{ padding: '2px 8px', fontStyle: 'italic', fontSize: '12px', border: '1px solid var(--border)', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}>I</button>
+                  <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => handleCondicionesFormat('bold')} style={{ padding: '2px 8px', fontWeight: 700, fontSize: '12px', border: '1px solid var(--border)', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}>B</button>
+                  <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => handleCondicionesFormat('italic')} style={{ padding: '2px 8px', fontStyle: 'italic', fontSize: '12px', border: '1px solid var(--border)', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}>I</button>
                 </div>
-                <textarea id="condiciones-empresa-textarea" rows="4" value={empresa.condicionesPresupuesto || ''} onChange={handleEmpresaChange('condicionesPresupuesto')} placeholder="Ej: Validez operativa del presupuesto: 30 días..."></textarea>
+                <div
+                  ref={condicionesEmpresaRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  onInput={() => setEmpresa(prev => ({ ...prev, condicionesPresupuesto: condicionesEmpresaRef.current.innerHTML }))}
+                  dangerouslySetInnerHTML={{ __html: empresa.condicionesPresupuesto || '' }}
+                  style={{ border: '1px solid var(--border)', borderRadius: '6px', padding: '8px 12px', minHeight: '88px', fontSize: '13px', lineHeight: '1.5', background: '#fff', outline: 'none', cursor: 'text' }}
+                />
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Este texto se mostrará como condiciones generales en todos los PDFs de presupuestos. Selecciona texto y pulsa B o I para formatear. También se puede personalizar por presupuesto.</div>
               </div>
             </div>

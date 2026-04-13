@@ -1,13 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { X, Plus, Trash2, ArrowUp, ArrowDown, Save, FileText, LayoutTemplate, Trash } from 'lucide-react';
 import { deleteDoc } from '../../services/db';
 
 export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave, onClose }) {
   const [activeSearch, setActiveSearch] = useState({ capIdx: null, partIdx: null });
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const condicionesRef = useRef(null);
   const isNew = !ppto;
+
+  const generateNextId = () => {
+    const year = new Date().getFullYear().toString().slice(-2);
+    const existing = (data?.presupuestos || [])
+      .map(p => p.id)
+      .filter(id => typeof id === 'string' && id.endsWith(`-${year}`))
+      .map(id => parseInt(id.split('-')[0], 10))
+      .filter(n => !isNaN(n));
+    const next = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+    return `${String(next).padStart(3, '0')}-${year}`;
+  };
+
   const [formData, setFormData] = useState(ppto || {
-    id: '',
+    id: generateNextId(),
+    etiqueta: '',
     clienteId: '',
     obraId: '',
     fecha: new Date().toISOString().split('T')[0],
@@ -15,27 +29,18 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
     notas: '',
     condicionesPresupuesto: '',
     capitulos: [
-      { id: 'CAP-1', nombre: 'Capítulo 1', partidas: [{ descripcion: '', unidad: 'ud', cantidad: 1, precioCoste: 0, precioVenta: 0 }] }
+      { id: 'CAP-1', nombre: 'Capítulo 1', partidas: [{ descripcion: '', unidad: '', cantidad: 1, precioCoste: 0, precioVenta: 0 }] }
     ],
     extras: []
   });
 
-  const idExists = isNew && formData.id && (data?.presupuestos || []).some(p => p.id === formData.id);
-
   const handleChange = (field) => (e) => setFormData({ ...formData, [field]: e.target.value });
 
-  const wrapCondicionesSelection = (tag) => {
-    const ta = document.getElementById('condiciones-ppto-textarea');
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const val = formData.condicionesPresupuesto || '';
-    const newVal = val.substring(0, start) + `<${tag}>` + val.substring(start, end) + `</${tag}>` + val.substring(end);
-    setFormData(prev => ({ ...prev, condicionesPresupuesto: newVal }));
-    setTimeout(() => {
-      ta.focus();
-      ta.setSelectionRange(start + tag.length + 2, end + tag.length + 2);
-    }, 0);
+  const handleCondicionesFormat = (command) => {
+    document.execCommand(command, false, null);
+    if (condicionesRef.current) {
+      setFormData(prev => ({ ...prev, condicionesPresupuesto: condicionesRef.current.innerHTML }));
+    }
   };
 
   const addCapitulo = () => {
@@ -53,7 +58,7 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
 
   const addPartida = (capIndex) => {
     const newCaps = [...formData.capitulos];
-    newCaps[capIndex].partidas.push({ descripcion: '', unidad: 'ud', cantidad: 1, precioCoste: 0, precioVenta: 0 });
+    newCaps[capIndex].partidas.push({ descripcion: '', unidad: '', cantidad: 1, precioCoste: 0, precioVenta: 0 });
     setFormData({ ...formData, capitulos: newCaps });
   };
 
@@ -93,7 +98,7 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
 
   const addPartidaExtra = (extIdx) => {
     const newExtras = [...(formData.extras || [])];
-    newExtras[extIdx].partidas.push({ descripcion: '', unidad: 'ud', cantidad: 1, precioCoste: 0, precioVenta: 0 });
+    newExtras[extIdx].partidas.push({ descripcion: '', unidad: '', cantidad: 1, precioCoste: 0, precioVenta: 0 });
     setFormData({ ...formData, extras: newExtras });
   };
 
@@ -111,6 +116,8 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
   };
 
   const formatCurrency = (val) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(val);
+
+  const autoResize = (el) => { if (!el) return; el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
 
   return (
     <div className="modal-overlay" style={{ zIndex: 100 }}>
@@ -143,28 +150,24 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
           
           <div className="stat-card" style={{ padding: '20px', marginBottom: '24px' }}>
             <div className="form-grid">
-              <div className="form-group full-width">
-                <label>Identificador del Presupuesto *</label>
-                <input 
-                  type="text" 
-                  value={formData.id} 
-                  onChange={handleChange('id')} 
-                  placeholder="Ej: PRE-REFORMA-GARCIA, PRE-2026-001..." 
-                  disabled={!isNew}
-                  autoFocus={isNew}
-                  style={{ 
-                    fontWeight: 600, 
-                    fontSize: '15px',
-                    ...(isNew && idExists ? { borderColor: '#dc2626', background: '#fef2f2' } : {}),
-                    ...(!isNew ? { background: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' } : {})
-                  }}
+              <div className="form-group half-width">
+                <label>Nº Presupuesto</label>
+                <input
+                  type="text"
+                  value={formData.id}
+                  disabled
+                  style={{ fontWeight: 600, fontSize: '15px', background: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' }}
                 />
-                {isNew && idExists && (
-                  <div style={{ color: '#dc2626', fontSize: '11px', marginTop: '4px', fontWeight: 600 }}>⚠ Ya existe un presupuesto con este ID. Elige otro nombre.</div>
-                )}
-                {isNew && !formData.id && (
-                  <div style={{ color: '#d97706', fontSize: '11px', marginTop: '4px' }}>Introduce un ID único para identificar este presupuesto.</div>
-                )}
+              </div>
+              <div className="form-group half-width">
+                <label>Etiqueta / Nombre descriptivo</label>
+                <input
+                  type="text"
+                  value={formData.etiqueta || ''}
+                  onChange={handleChange('etiqueta')}
+                  placeholder="Ej: Reforma cocina García, Fachada calle Mayor..."
+                  autoFocus={isNew}
+                />
               </div>
               <div className="form-group half-width">
                 <label>Cliente</label>
@@ -187,10 +190,17 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
               <div className="form-group full-width">
                 <label>Condiciones Generales de Presupuestos (Aparecen al pie del PDF)</label>
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
-                  <button type="button" onClick={() => wrapCondicionesSelection('b')} style={{ padding: '2px 8px', fontWeight: 700, fontSize: '12px', border: '1px solid var(--border)', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}>B</button>
-                  <button type="button" onClick={() => wrapCondicionesSelection('i')} style={{ padding: '2px 8px', fontStyle: 'italic', fontSize: '12px', border: '1px solid var(--border)', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}>I</button>
+                  <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => handleCondicionesFormat('bold')} style={{ padding: '2px 8px', fontWeight: 700, fontSize: '12px', border: '1px solid var(--border)', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}>B</button>
+                  <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => handleCondicionesFormat('italic')} style={{ padding: '2px 8px', fontStyle: 'italic', fontSize: '12px', border: '1px solid var(--border)', borderRadius: '4px', background: '#f8fafc', cursor: 'pointer' }}>I</button>
                 </div>
-                <textarea id="condiciones-ppto-textarea" rows="3" value={formData.condicionesPresupuesto || ''} onChange={handleChange('condicionesPresupuesto')} placeholder="Si se rellena, sustituirá las condiciones generales de la empresa en el PDF..." />
+                <div
+                  ref={condicionesRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  onInput={() => setFormData(prev => ({ ...prev, condicionesPresupuesto: condicionesRef.current.innerHTML }))}
+                  dangerouslySetInnerHTML={{ __html: formData.condicionesPresupuesto || '' }}
+                  style={{ border: '1px solid var(--border)', borderRadius: '6px', padding: '8px 12px', minHeight: '72px', fontSize: '13px', lineHeight: '1.5', background: '#fff', outline: 'none', cursor: 'text' }}
+                />
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Si se rellena, sustituirá las condiciones generales de la empresa. Selecciona texto y pulsa B o I para formatear.</div>
               </div>
             </div>
@@ -211,16 +221,19 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
                 {/* Cap Header */}
                 <div style={{ padding: '12px 16px', background: '#f1f5f9', borderBottom: '1px solid var(--border)', display: 'flex', gap: '12px', alignItems: 'center' }}>
                   <div style={{ fontWeight: 700, color: '#475569', fontSize: '12px', minWidth: '80px' }}>CAPÍTULO {capIdx + 1}</div>
-                  <input 
-                    type="text" value={cap.nombre} 
+                  <textarea
+                    value={cap.nombre}
+                    rows={1}
                     onChange={(e) => {
                       const newCaps = [...formData.capitulos];
                       newCaps[capIdx].nombre = e.target.value;
                       setFormData({ ...formData, capitulos: newCaps });
-                    }} 
-                    style={{ flex: 1, padding: '6px 10px', border: '1px solid transparent', background: 'transparent', fontWeight: 600, fontSize: '14px', outline: 'none' }}
-                    onFocus={e => e.target.style.background = '#fff'}
+                      autoResize(e.target);
+                    }}
+                    style={{ flex: 1, padding: '6px 10px', border: '1px solid transparent', background: 'transparent', fontWeight: 600, fontSize: '14px', outline: 'none', resize: 'none', overflow: 'hidden', fontFamily: 'inherit', lineHeight: '1.4' }}
+                    onFocus={e => { e.target.style.background = '#fff'; autoResize(e.target); }}
                     onBlur={e => e.target.style.background = 'transparent'}
+                    ref={el => autoResize(el)}
                     placeholder="Nombre del capítulo..."
                   />
                   <div style={{ fontWeight: 800, fontSize: '14px', color: '#1a1a1a' }}>{formatCurrency(capTotal)}</div>
@@ -245,12 +258,14 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
                         <tr key={partIdx} style={{ borderBottom: '1px solid var(--border)' }}>
                           <td style={{ padding: '6px 0' }}>
                             <div style={{ position: 'relative' }}>
-                              <input 
-                                type="text" value={partida.descripcion || ''} 
-                                onChange={(e) => updatePartida(capIdx, partIdx, 'descripcion', e.target.value)}
-                                onFocus={() => setActiveSearch({ capIdx, partIdx })}
+                              <textarea
+                                rows={1}
+                                value={partida.descripcion || ''}
+                                onChange={(e) => { updatePartida(capIdx, partIdx, 'descripcion', e.target.value); autoResize(e.target); }}
+                                onFocus={(e) => { setActiveSearch({ capIdx, partIdx }); autoResize(e.target); }}
                                 onBlur={() => setTimeout(() => setActiveSearch({ capIdx: null, partIdx: null }), 200)}
-                                style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: '6px' }}
+                                ref={el => autoResize(el)}
+                                style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: '6px', resize: 'none', overflow: 'hidden', fontFamily: 'inherit', fontSize: '13px', lineHeight: '1.4' }}
                                 placeholder="Escribe para buscar o añade libremente..."
                               />
                               
@@ -276,16 +291,18 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
                             </div>
                           </td>
                           <td style={{ padding: '6px 8px' }}>
-                            <input 
-                              type="text" value={partida.unidad || 'ud'} 
+                            <input
+                              type="text" value={partida.unidad || ''} placeholder="ud"
                               onChange={(e) => updatePartida(capIdx, partIdx, 'unidad', e.target.value)}
+                              onFocus={(e) => e.target.select()}
                               style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center', fontSize: '13px', color: '#475569' }}
                             />
                           </td>
                           <td style={{ padding: '6px 8px' }}>
-                            <input 
-                              type="number" value={partida.cantidad} 
+                            <input
+                              type="number" value={partida.cantidad}
                               onChange={(e) => updatePartida(capIdx, partIdx, 'cantidad', e.target.value)}
+                              onFocus={(e) => e.target.select()}
                               style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center' }}
                             />
                           </td>
@@ -293,6 +310,7 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
                             <input
                               type="number" value={partida.precioVenta}
                               onChange={(e) => updatePartida(capIdx, partIdx, 'precioVenta', e.target.value)}
+                              onFocus={(e) => e.target.select()}
                               style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'right' }}
                             />
                           </td>
@@ -335,16 +353,19 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
                 <div key={ext.id} className="stat-card" style={{ padding: '0', marginBottom: '16px', border: '2px solid #fbbf24', overflow: 'hidden' }}>
                   <div style={{ padding: '12px 16px', background: '#fffbeb', borderBottom: '1px solid #fde68a', display: 'flex', gap: '12px', alignItems: 'center' }}>
                     <div style={{ fontWeight: 700, color: '#92400e', fontSize: '12px', minWidth: '60px' }}>EXTRA {extIdx + 1}</div>
-                    <input 
-                      type="text" value={ext.nombre} 
+                    <textarea
+                      rows={1}
+                      value={ext.nombre}
                       onChange={(e) => {
                         const newExtras = [...(formData.extras || [])];
                         newExtras[extIdx].nombre = e.target.value;
                         setFormData({ ...formData, extras: newExtras });
-                      }} 
-                      style={{ flex: 1, padding: '6px 10px', border: '1px solid transparent', background: 'transparent', fontWeight: 600, fontSize: '14px', outline: 'none', color: '#92400e' }}
-                      onFocus={e => e.target.style.background = '#fff'}
+                        autoResize(e.target);
+                      }}
+                      style={{ flex: 1, padding: '6px 10px', border: '1px solid transparent', background: 'transparent', fontWeight: 600, fontSize: '14px', outline: 'none', color: '#92400e', resize: 'none', overflow: 'hidden', fontFamily: 'inherit', lineHeight: '1.4' }}
+                      onFocus={e => { e.target.style.background = '#fff'; autoResize(e.target); }}
                       onBlur={e => e.target.style.background = 'transparent'}
+                      ref={el => autoResize(el)}
                       placeholder="Nombre del extra..."
                     />
                     <div style={{ fontWeight: 800, fontSize: '14px', color: '#92400e' }}>{formatCurrency(extTotal)}</div>
@@ -366,16 +387,24 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
                         {ext.partidas.map((partida, partIdx) => (
                           <tr key={partIdx} style={{ borderBottom: '1px solid var(--border)' }}>
                             <td style={{ padding: '6px 0' }}>
-                              <input type="text" value={partida.descripcion || ''} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'descripcion', e.target.value)} style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: '6px' }} placeholder="Descripción del extra..." />
+                              <textarea
+                                rows={1}
+                                value={partida.descripcion || ''}
+                                onChange={(e) => { updatePartidaExtra(extIdx, partIdx, 'descripcion', e.target.value); autoResize(e.target); }}
+                                onFocus={(e) => autoResize(e.target)}
+                                ref={el => autoResize(el)}
+                                style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: '6px', resize: 'none', overflow: 'hidden', fontFamily: 'inherit', fontSize: '13px', lineHeight: '1.4' }}
+                                placeholder="Descripción del extra..."
+                              />
                             </td>
                             <td style={{ padding: '6px 8px' }}>
-                              <input type="text" value={partida.unidad || 'ud'} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'unidad', e.target.value)} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center', fontSize: '13px' }} />
+                              <input type="text" value={partida.unidad || ''} placeholder="ud" onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'unidad', e.target.value)} onFocus={(e) => e.target.select()} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center', fontSize: '13px' }} />
                             </td>
                             <td style={{ padding: '6px 8px' }}>
-                              <input type="number" value={partida.cantidad} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'cantidad', e.target.value)} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center' }} />
+                              <input type="number" value={partida.cantidad} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'cantidad', e.target.value)} onFocus={(e) => e.target.select()} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center' }} />
                             </td>
                             <td style={{ padding: '6px 8px' }}>
-                              <input type="number" value={partida.precioVenta} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'precioVenta', e.target.value)} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'right' }} />
+                              <input type="number" value={partida.precioVenta} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'precioVenta', e.target.value)} onFocus={(e) => e.target.select()} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'right' }} />
                             </td>
                             <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 600 }}>{formatCurrency(partida.cantidad * partida.precioVenta)}</td>
                             <td style={{ padding: '6px 0', textAlign: 'right' }}>
@@ -401,11 +430,7 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
         {/* Footer */}
         <div className="modal-footer" style={{ background: '#fff' }}>
           <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-          <button className="btn-primary" onClick={() => {
-            if (!formData.id) return alert('Debes introducir un ID para el presupuesto');
-            if (isNew && idExists) return alert('Ya existe un presupuesto con ese ID');
-            onSave(formData);
-          }}>
+          <button className="btn-primary" onClick={() => onSave(formData)}>
             <Save size={16} /> Guardar Presupuesto
           </button>
         </div>
