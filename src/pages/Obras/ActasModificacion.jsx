@@ -8,7 +8,42 @@ export default function ActasModificacion({ obra, onClose }) {
   const [showForm, setShowForm] = useState(false);
   const [printActa, setPrintActa] = useState(null);
   const [signature, setSignature] = useState(null);
-  const [form, setForm] = useState({ descripcion: '', impactoDias: 0, impactoCoste: 0 });
+  const [form, setForm] = useState({ descripcion: '', impactoDias: 0, impactoCoste: 0, archivos: [] });
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleFiles = async (selectedFiles) => {
+    if (!selectedFiles || selectedFiles.length === 0) return;
+    setIsUploading(true);
+    try {
+      const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+      const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+      const uploadPromises = selectedFiles.map(async (file) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('upload_preset', uploadPreset);
+        fd.append('folder', `obras/${obra.id}/actas`);
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, { method: 'POST', body: fd });
+        const dataResponse = await res.json();
+        if (dataResponse.error) throw new Error(dataResponse.error.message);
+        return {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+          name: file.name,
+          url: dataResponse.secure_url,
+          type: file.type.startsWith('image/') ? 'image' : 'document',
+          size: file.size,
+          date: new Date().toISOString()
+        };
+      });
+      const uploadedFiles = await Promise.all(uploadPromises);
+      setForm(prev => ({ ...prev, archivos: [...(prev.archivos || []), ...uploadedFiles] }));
+    } catch (err) {
+      console.error(err);
+      alert("Error subiendo archivos al acta.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!form.descripcion.trim()) return;
@@ -23,7 +58,7 @@ export default function ActasModificacion({ obra, onClose }) {
     setActas(updated);
     await saveDoc('obras', obra.id, { ...obra, actas: updated });
     setShowForm(false);
-    setForm({ descripcion: '', impactoDias: 0, impactoCoste: 0 });
+    setForm({ descripcion: '', impactoDias: 0, impactoCoste: 0, archivos: [] });
   };
 
   const handleRemove = async (id) => {
@@ -83,6 +118,15 @@ export default function ActasModificacion({ obra, onClose }) {
                     <span style={{ color: a.impactoDias > 0 ? '#dc2626' : '#16a34a' }}>Impacto plazo: {a.impactoDias > 0 ? '+' : ''}{a.impactoDias} días</span>
                     <span style={{ color: a.impactoCoste > 0 ? '#dc2626' : '#16a34a' }}>Impacto coste: {a.impactoCoste > 0 ? '+' : ''}{formatCur(a.impactoCoste)}</span>
                   </div>
+                  {a.archivos && a.archivos.length > 0 && (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                      {a.archivos.map(f => (
+                         <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', color: '#3b82f6', textDecoration: 'none', border: '1px solid #e2e8f0' }} onClick={e => e.stopPropagation()}>
+                           <FileText size={12} /> {f.name}
+                         </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -105,7 +149,33 @@ export default function ActasModificacion({ obra, onClose }) {
                 </div>
                 <div className="form-group half-width">
                   <label>Impacto en coste (€)</label>
-                  <input type="number" value={form.impactoCoste} onChange={e => setForm({...form, impactoCoste: parseFloat(e.target.value) || 0})} />
+                  <input type="number" value={form.impactoCoste || ''} onChange={e => setForm({...form, impactoCoste: parseFloat(e.target.value) || 0})} />
+                </div>
+                <div className="form-group full-width">
+                  <label>Documentos Adjuntos</label>
+                  <label 
+                     onDrop={e => { e.preventDefault(); setIsDragging(false); handleFiles(Array.from(e.dataTransfer.files)); }} 
+                     onDragOver={e => { e.preventDefault(); setIsDragging(true); }} 
+                     onDragLeave={e => { e.preventDefault(); setIsDragging(false); }}
+                     style={{ 
+                       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
+                       padding: '16px', border: `2px dashed ${isDragging ? '#3b82f6' : '#cbd5e1'}`, borderRadius: '8px', 
+                       background: isDragging ? '#eff6ff' : '#f8fafc', cursor: isUploading ? 'not-allowed' : 'pointer', opacity: isUploading ? 0.7 : 1
+                     }}
+                  >
+                    <input type="file" multiple style={{ display: 'none' }} onChange={e => handleFiles(Array.from(e.target.files))} disabled={isUploading} />
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)' }}>{isUploading ? 'Subiendo...' : 'Arrastra o haz clic para subir justificantes'}</div>
+                  </label>
+                  {(form.archivos || []).length > 0 && (
+                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {form.archivos.map(f => (
+                        <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', background: '#f1f5f9', borderRadius: '6px', fontSize: '11px' }}>
+                          <span style={{ color: '#334155', fontWeight: 500 }}>{f.name}</span>
+                          <button onClick={(e) => { e.preventDefault(); setForm(prev => ({...prev, archivos: prev.archivos.filter(x => x.id !== f.id)}))}} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={12} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="modal-footer">

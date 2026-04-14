@@ -8,7 +8,7 @@ export default function Trabajadores({ data, setData }) {
   const [horasForm, setHorasForm] = useState({ trabajador: '', fecha: new Date().toISOString().split('T')[0], horas: '', concepto: '', obraId: '' });
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ nombre: '', apellidos: '', rol: '', email: '', telefono: '', dni: '', comentarios: '' });
+  const [formData, setFormData] = useState({ nombre: '', apellidos: '', rol: '', email: '', telefono: '', dni: '', comentarios: '', costeBase: '', iva: 0 });
   const [editingId, setEditingId] = useState(null);
 
   const trabajadores = data?.trabajadores || [];
@@ -51,7 +51,7 @@ export default function Trabajadores({ data, setData }) {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '16px', margin: 0 }}>Plantilla ({trabajadores.length})</h3>
-            <button className="btn-primary" onClick={() => { setFormData({ nombre: '', apellidos: '', rol: '', email: '', telefono: '', dni: '', comentarios: '' }); setEditingId(null); setIsModalOpen(true); }}>
+            <button className="btn-primary" onClick={() => { setFormData({ nombre: '', apellidos: '', rol: '', email: '', telefono: '', dni: '', comentarios: '', costeBase: '', iva: 0 }); setEditingId(null); setIsModalOpen(true); }}>
               <UserPlus size={16} /> Añadir Trabajador
             </button>
           </div>
@@ -248,6 +248,23 @@ export default function Trabajadores({ data, setData }) {
               <div className="form-group half-width">
                 <label>DNI / NIE</label>
                 <input type="text" value={formData.dni || ''} onChange={e => setFormData({...formData, dni: e.target.value})} />
+              </div>
+              <div className="form-group half-width">
+                <label>Coste Hora Base (€)</label>
+                <input type="number" step="0.01" value={formData.costeBase || ''} onChange={e => setFormData({...formData, costeBase: e.target.value})} placeholder="Ej: 15.50" />
+              </div>
+              <div className="form-group half-width">
+                <label>IVA (%)</label>
+                <select value={formData.iva !== undefined ? formData.iva : 0} onChange={e => setFormData({...formData, iva: Number(e.target.value)})}>
+                  <option value={0}>0%</option>
+                  <option value={4}>4%</option>
+                  <option value={10}>10%</option>
+                  <option value={21}>21%</option>
+                </select>
+              </div>
+              <div className="form-group full-width">
+                <label>Coste Hora Total (€)</label>
+                <input type="text" value={formData.costeBase ? (Number(formData.costeBase) * (1 + (formData.iva || 0) / 100)).toFixed(2) + ' €' : ''} readOnly disabled style={{ background: '#f8fafc', fontWeight: 600, color: '#334155' }} />
               </div>
               <div className="form-group full-width">
                 <label>Comentarios</label>

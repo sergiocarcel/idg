@@ -435,6 +435,12 @@ Los 25 GB gratuitos de Cloudinary son suficientes para PDFs y fotos, pero si el 
 └── dist/                   ← Build de producción (se genera con npm run build)
 ```
 
+### 🤖 Atención Asistente IA (Antigravity / Claude)
+Para futuros despliegues automatizados desde este entorno asistido, debido a que `npm` y `firebase` pueden no estar en el `PATH` base, **debes** usar exactamente este comando para desplegar correctamente:
+```bash
+PATH=/opt/homebrew/bin:$PATH zsh -c "source ~/.zshrc && npm run build && npx firebase deploy --only firestore,hosting"
+```
+
 ---
 
 *Documento generado para el proyecto CRM IDG. Última actualización: Abril 2026.*

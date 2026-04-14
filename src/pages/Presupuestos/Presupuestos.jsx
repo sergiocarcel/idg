@@ -81,8 +81,24 @@ export default function Presupuestos({ data, setData, forceMode }) {
     setIsEditorOpen(true);
   };
 
+  const handleEditTemplate = (tpl) => {
+    setSelectedPpto({ ...tpl, etiqueta: tpl.nombre, isTemplateFlag: true });
+    setIsEditorOpen(true);
+  };
+
   const handleSave = async (savedPpto) => {
-    await saveDoc('presupuestos', savedPpto.id, savedPpto);
+    if (savedPpto.isTemplateFlag) {
+      await saveDoc('plantillasPresupuesto', savedPpto.id, {
+        id: savedPpto.id,
+        nombre: savedPpto.etiqueta || 'Plantilla sin nombre',
+        capitulos: savedPpto.capitulos,
+        extras: savedPpto.extras,
+        condicionesPresupuesto: savedPpto.condicionesPresupuesto,
+        createdAt: savedPpto.createdAt || new Date().toISOString()
+      });
+    } else {
+      await saveDoc('presupuestos', savedPpto.id, savedPpto);
+    }
     setIsEditorOpen(false);
   };
 
@@ -339,7 +355,8 @@ export default function Presupuestos({ data, setData, forceMode }) {
             { id: 'enviado', label: 'Enviados' },
             { id: 'aceptado', label: 'Aceptados' },
             { id: 'rechazado', label: 'Rechazados' },
-            { id: 'eliminado', label: '🗑️ Papelera' }
+            { id: 'eliminado', label: '🗑️ Papelera' },
+            { id: 'plantillas', label: '📑 Plantillas' }
           ].map(f => (
             <button 
               key={f.id}
@@ -355,174 +372,212 @@ export default function Presupuestos({ data, setData, forceMode }) {
                 cursor: 'pointer',
                 transition: 'all 0.2s'
               }}
-            >
+             >
               {f.label}
             </button>
           ))}
         </div>
 
-        {/* Tabla principal */}
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Cliente</th>
-              <th>Fecha de Creación</th>
-              <th>Importe Total</th>
-              <th>Estado</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredPptos.length === 0 && (
-              <tr><td colSpan="6" style={{textAlign:'center', padding:'32px', color:'#94a3b8'}}>No hay presupuestos en esta categoría</td></tr>
-            )}
-            {filteredPptos.map(ppto => {
-              const status = getStatusStyle(ppto.estado);
-              return (
-                <tr key={ppto.id}>
-                  <td>
-                    <div style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--text-muted)' }}>{ppto.id}</div>
-                    {ppto.etiqueta && <div style={{ fontSize: '11px', color: 'var(--text-main)', marginTop: '2px', fontWeight: 500 }}>{ppto.etiqueta}</div>}
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{getClientName(ppto.clienteId)}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Ref: {ppto.obraId || 'S/N'}</div>
-                  </td>
-                  <td>{new Date(ppto.fecha).toLocaleDateString()}</td>
-                  <td style={{ fontWeight: '600' }}>{formatCurrency(calculateTotal(ppto))}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span style={{ background: status.bg, color: status.color, padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600 }}>
-                        {status.label}
-                      </span>
-                      {isExpired(ppto.fecha, ppto.estado) && (
-                        <span title="Han pasado más de 7 días desde el envío" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '3px 6px', borderRadius: '6px', fontSize: '10px', fontWeight: 800, letterSpacing: '-0.3px', display: 'flex', alignItems: 'center' }}>
-                          ¡+7 DÍAS!
+        {/* Tablas */}
+        {filter === 'plantillas' ? (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>ID Plantilla</th>
+                <th>Nombre</th>
+                <th>Desglose</th>
+                <th>Fecha de Creación</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {(!data?.plantillasPresupuesto || data?.plantillasPresupuesto.length === 0) && (
+                <tr><td colSpan="5" style={{textAlign:'center', padding:'32px', color:'#94a3b8'}}>No hay plantillas guardadas</td></tr>
+              )}
+              {(data?.plantillasPresupuesto || []).map(tpl => {
+                const capCount = (tpl.capitulos || []).length;
+                const partCount = (tpl.capitulos || []).reduce((s, c) => s + (c.partidas || []).length, 0);
+                const extCount = (tpl.extras || []).length;
+                return (
+                  <tr key={tpl.id}>
+                    <td><div style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--text-muted)' }}>{tpl.id}</div></td>
+                    <td style={{ fontWeight: 600, color: 'var(--text-main)' }}>{tpl.nombre}</td>
+                    <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{capCount} caps, {partCount} partidas {extCount > 0 && `, ${extCount} extras`}</td>
+                    <td>{new Date(tpl.createdAt || Date.now()).toLocaleDateString()}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                         <button className="icon-btn" onClick={() => handleEditTemplate(tpl)} title="Editar Plantilla"><Edit2 size={14} /></button>
+                         <button className="icon-btn danger" onClick={async () => { if(window.confirm('¿Eliminar plantilla?')) await deleteDoc('plantillasPresupuesto', tpl.id); }} title="Eliminar"><Trash2 size={14} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Cliente</th>
+                <th>Fecha de Creación</th>
+                <th>Importe Total</th>
+                <th>Estado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPptos.length === 0 && (
+                <tr><td colSpan="6" style={{textAlign:'center', padding:'32px', color:'#94a3b8'}}>No hay presupuestos en esta categoría</td></tr>
+              )}
+              {filteredPptos.map(ppto => {
+                const status = getStatusStyle(ppto.estado);
+                return (
+                  <tr key={ppto.id}>
+                    <td>
+                      <div style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--text-muted)' }}>{ppto.id}</div>
+                      {ppto.etiqueta && <div style={{ fontSize: '11px', color: 'var(--text-main)', marginTop: '2px', fontWeight: 500 }}>{ppto.etiqueta}</div>}
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{getClientName(ppto.clienteId)}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Ref: {ppto.obraId || 'S/N'}</div>
+                    </td>
+                    <td>{new Date(ppto.fecha).toLocaleDateString()}</td>
+                    <td style={{ fontWeight: '600' }}>{formatCurrency(calculateTotal(ppto))}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ background: status.bg, color: status.color, padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600 }}>
+                          {status.label}
                         </span>
-                      )}
-                      {ppto.firmaEstado === 'enviado' && (
-                        <span style={{ background: '#fef3c7', color: '#d97706', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
-                          <FileSignature size={10} /> Pte. firma
-                        </span>
-                      )}
-                      {ppto.firmaEstado === 'firmado' && (
-                        <a href={ppto.pdfFirmadoUrl} target="_blank" rel="noopener noreferrer" title="Ver PDF firmado"
-                          style={{ background: '#dcfce7', color: '#16a34a', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px', textDecoration: 'none' }}>
-                          <FileSignature size={10} /> Firmado <Paperclip size={9} />
-                        </a>
-                      )}
-                      {ppto.firmaEstado === 'rechazado' && (
-                        <span style={{ background: '#fef2f2', color: '#dc2626', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
-                          <FileSignature size={10} /> Firma rechazada
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                      {/* Comprobar firma — visible cuando hay firma pendiente */}
-                      {ppto.firmaEstado === 'enviado' && (
-                        <button className="icon-btn" onClick={() => handleCheckFirma(ppto)} disabled={checkingFirma === ppto.id}
-                          title="Comprobar si el cliente ya ha firmado"
-                          style={{ color: '#d97706', borderColor: '#fcd34d' }}>
-                          {checkingFirma === ppto.id ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={14} />}
-                        </button>
-                      )}
-
-                      {/* Siempre visible: Editar */}
-                      <button className="icon-btn" onClick={() => handleEdit(ppto)} title="Editar presupuesto"><Edit2 size={14} /></button>
-
-                      {/* Siempre visible: Selector de PDF */}
-                      <button className="icon-btn" onClick={() => setPdfSelectionModal(ppto)} title="Exportar PDF"><Printer size={14} /></button>
-
-                      {/* Papelera / Restaurar */}
-                      {ppto.estado !== 'eliminado' ? (
-                        <button className="icon-btn danger" onClick={async () => { if(window.confirm('¿Mover a papelera?')) await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'eliminado' }); }} title="Mover a papelera"><Trash2 size={14} /></button>
-                      ) : (
-                        <>
-                          <button className="icon-btn" onClick={async () => { await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'borrador' }); }} title="Restaurar" style={{ color: '#16a34a' }}><RotateCcw size={14} /></button>
-                          <button className="icon-btn danger" onClick={async () => { if(window.confirm('¿Eliminar PERMANENTEMENTE?')) await deleteDoc('presupuestos', ppto.id); }} title="Eliminar definitivo"><Trash2 size={14} /></button>
-                        </>
-                      )}
-
-                      {/* Menú "Más opciones" */}
-                      {ppto.estado !== 'eliminado' && (
-                        <div style={{ position: 'relative' }}>
-                          <button className="icon-btn" onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === ppto.id ? null : ppto.id); }} title="Más opciones"><MoreHorizontal size={14} /></button>
-                          {openMenu === ppto.id && (
-                            <div data-menu-dropdown style={{
-                              position: 'absolute', right: 0, top: '100%', marginTop: '4px',
-                              background: '#fff', border: '1px solid var(--border)', borderRadius: '8px',
-                              boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 50,
-                              width: '200px', padding: '4px 0', fontSize: '12px'
-                            }}>
-                              {/* Firma electrónica */}
-                              {ppto.estado !== 'aceptado' && ppto.estado !== 'rechazado' && (
-                                <button onClick={() => openPreview(ppto, 'firma')}
+                        {isExpired(ppto.fecha, ppto.estado) && (
+                          <span title="Han pasado más de 7 días desde el envío" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '3px 6px', borderRadius: '6px', fontSize: '10px', fontWeight: 800, letterSpacing: '-0.3px', display: 'flex', alignItems: 'center' }}>
+                            ¡+7 DÍAS!
+                          </span>
+                        )}
+                        {ppto.firmaEstado === 'enviado' && (
+                          <span style={{ background: '#fef3c7', color: '#d97706', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <FileSignature size={10} /> Pte. firma
+                          </span>
+                        )}
+                        {ppto.firmaEstado === 'firmado' && (
+                          <a href={ppto.pdfFirmadoUrl} target="_blank" rel="noopener noreferrer" title="Ver PDF firmado"
+                            style={{ background: '#dcfce7', color: '#16a34a', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px', textDecoration: 'none' }}>
+                            <FileSignature size={10} /> Firmado <Paperclip size={9} />
+                          </a>
+                        )}
+                        {ppto.firmaEstado === 'rechazado' && (
+                          <span style={{ background: '#fef2f2', color: '#dc2626', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <FileSignature size={10} /> Firma rechazada
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        {/* Comprobar firma — visible cuando hay firma pendiente */}
+                        {ppto.firmaEstado === 'enviado' && (
+                          <button className="icon-btn" onClick={() => handleCheckFirma(ppto)} disabled={checkingFirma === ppto.id}
+                            title="Comprobar si el cliente ya ha firmado"
+                            style={{ color: '#d97706', borderColor: '#fcd34d' }}>
+                            {checkingFirma === ppto.id ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={14} />}
+                          </button>
+                        )}
+  
+                        {/* Siempre visible: Editar */}
+                        <button className="icon-btn" onClick={() => handleEdit(ppto)} title="Editar presupuesto"><Edit2 size={14} /></button>
+  
+                        {/* Siempre visible: Selector de PDF */}
+                        <button className="icon-btn" onClick={() => setPdfSelectionModal(ppto)} title="Exportar PDF"><Printer size={14} /></button>
+  
+                        {/* Papelera / Restaurar */}
+                        {ppto.estado !== 'eliminado' ? (
+                          <button className="icon-btn danger" onClick={async () => { if(window.confirm('¿Mover a papelera?')) await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'eliminado' }); }} title="Mover a papelera"><Trash2 size={14} /></button>
+                        ) : (
+                          <>
+                            <button className="icon-btn" onClick={async () => { await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'borrador' }); }} title="Restaurar" style={{ color: '#16a34a' }}><RotateCcw size={14} /></button>
+                            <button className="icon-btn danger" onClick={async () => { if(window.confirm('¿Eliminar PERMANENTEMENTE?')) await deleteDoc('presupuestos', ppto.id); }} title="Eliminar definitivo"><Trash2 size={14} /></button>
+                          </>
+                        )}
+  
+                        {/* Menú "Más opciones" */}
+                        {ppto.estado !== 'eliminado' && (
+                          <div style={{ position: 'relative' }}>
+                            <button className="icon-btn" onClick={(e) => { e.stopPropagation(); setOpenMenu(openMenu === ppto.id ? null : ppto.id); }} title="Más opciones"><MoreHorizontal size={14} /></button>
+                            {openMenu === ppto.id && (
+                              <div data-menu-dropdown style={{
+                                position: 'absolute', right: 0, top: '100%', marginTop: '4px',
+                                background: '#fff', border: '1px solid var(--border)', borderRadius: '8px',
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 50,
+                                width: '200px', padding: '4px 0', fontSize: '12px'
+                              }}>
+                                {/* Firma electrónica */}
+                                {ppto.estado !== 'aceptado' && ppto.estado !== 'rechazado' && (
+                                  <button onClick={() => openPreview(ppto, 'firma')}
+                                    style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#7c3aed', textAlign: 'left' }}>
+                                    <FileSignature size={13} /> Enviar para Firmar
+                                  </button>
+                                )}
+                                {/* WhatsApp */}
+                                <button onClick={() => openPreview(ppto, 'whatsapp')}
+                                  style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#25D366', textAlign: 'left' }}>
+                                  <MessageCircle size={13} /> Enviar por WhatsApp (PDF)
+                                </button>
+                                {/* Email */}
+                                <button onClick={() => openPreview(ppto, 'email')}
+                                  style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#2563eb', textAlign: 'left' }}>
+                                  <Mail size={13} /> Enviar por Email (PDF)
+                                </button>
+                                {/* Guardar como plantilla */}
+                                <button onClick={() => { setSaveTemplateModal(ppto); setSaveTemplateName(''); setOpenMenu(null); }}
                                   style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#7c3aed', textAlign: 'left' }}>
-                                  <FileSignature size={13} /> Enviar para Firmar
+                                  <LayoutTemplate size={13} /> Guardar como Plantilla
                                 </button>
-                              )}
-                              {/* WhatsApp */}
-                              <button onClick={() => openPreview(ppto, 'whatsapp')}
-                                style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#25D366', textAlign: 'left' }}>
-                                <MessageCircle size={13} /> Enviar por WhatsApp (PDF)
-                              </button>
-                              {/* Email */}
-                              <button onClick={() => openPreview(ppto, 'email')}
-                                style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#2563eb', textAlign: 'left' }}>
-                                <Mail size={13} /> Enviar por Email (PDF)
-                              </button>
-                              {/* Guardar como plantilla */}
-                              <button onClick={() => { setSaveTemplateModal(ppto); setSaveTemplateName(''); setOpenMenu(null); }}
-                                style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#7c3aed', textAlign: 'left' }}>
-                                <LayoutTemplate size={13} /> Guardar como Plantilla
-                              </button>
-                              {/* Marcar como Aceptado */}
-                              {ppto.estado === 'enviado' && (
-                                <button onClick={async () => {
-                                  await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'aceptado' });
-                                  if (!ppto.obraId) {
-                                    setLinkObraModal(ppto);
-                                  } else {
-                                    // Ya tiene obra vinculada: guardar PDF dirección en archivos de la obra
-                                    const obra = (data?.obras || []).find(o => o.id === ppto.obraId);
-                                    if (obra) {
-                                      try {
-                                        const { blob } = await generatePresupuestoPdf(ppto, data, 'direccion');
-                                        const fd = new FormData();
-                                        fd.append('file', blob, `Presupuesto_${ppto.id}_Direccion.pdf`);
-                                        fd.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
-                                        fd.append('folder', `obras/${ppto.obraId}`);
-                                        const uploaded = await fetch(
-                                          `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`,
-                                          { method: 'POST', body: fd }
-                                        ).then(r => r.json());
-                                        if (!uploaded.error) {
-                                          const newFile = { id: Date.now().toString(), name: `Presupuesto_${ppto.id}_Direccion.pdf`, url: uploaded.secure_url, type: 'document', size: blob.size, date: new Date().toISOString() };
-                                          await updateDoc('obras', ppto.obraId, { archivos: [newFile, ...(obra.archivos || [])] });
-                                        }
-                                      } catch (_) {}
+                                {/* Marcar como Aceptado */}
+                                {ppto.estado === 'enviado' && (
+                                  <button onClick={async () => {
+                                    await saveDoc('presupuestos', ppto.id, { ...ppto, estado: 'aceptado' });
+                                    if (!ppto.obraId) {
+                                      setLinkObraModal(ppto);
+                                    } else {
+                                      // Ya tiene obra vinculada: guardar PDF dirección en archivos de la obra
+                                      const obra = (data?.obras || []).find(o => o.id === ppto.obraId);
+                                      if (obra) {
+                                        try {
+                                          const { blob } = await generatePresupuestoPdf(ppto, data, 'direccion');
+                                          const fd = new FormData();
+                                          fd.append('file', blob, `Presupuesto_${ppto.id}_Direccion.pdf`);
+                                          fd.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+                                          fd.append('folder', `obras/${ppto.obraId}`);
+                                          const uploaded = await fetch(
+                                            `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`,
+                                            { method: 'POST', body: fd }
+                                          ).then(r => r.json());
+                                          if (!uploaded.error) {
+                                            const newFile = { id: Date.now().toString(), name: `Presupuesto_${ppto.id}_Direccion.pdf`, url: uploaded.secure_url, type: 'document', size: blob.size, date: new Date().toISOString() };
+                                            await updateDoc('obras', ppto.obraId, { archivos: [newFile, ...(obra.archivos || [])] });
+                                          }
+                                        } catch (_) {}
+                                      }
                                     }
-                                  }
-                                  setOpenMenu(null);
-                                }}
-                                  style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#16a34a', textAlign: 'left' }}>
-                                  <CheckCircle size={13} /> Marcar como Aceptado
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+                                    setOpenMenu(null);
+                                  }}
+                                    style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: '#16a34a', textAlign: 'left' }}>
+                                    <CheckCircle size={13} /> Marcar como Aceptado
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {isEditorOpen && (

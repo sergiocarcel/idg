@@ -10,6 +10,7 @@ export default function Pedidos({ data, setData, userName, userEmail }) {
   const initialForm = { descripcion: '', obraId: '', prioridad: 'no_urgente', notas: '', albaranUrl: '', trabajadorId: '' };
   const [formData, setFormData] = useState(initialForm);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [notifyModal, setNotifyModal] = useState(null);
 
   const pedidos = data?.pedidos || [];
@@ -22,55 +23,80 @@ export default function Pedidos({ data, setData, userName, userEmail }) {
 
   const handleInputChange = (field) => (e) => setFormData({ ...formData, [field]: e.target.value });
 
+  const renderDescripcion = (text) => {
+    if (!text) return null;
+    return text.split('\n').map((line, i) => {
+      const tLine = line.trim();
+      if (tLine.startsWith('- ') || tLine.startsWith('• ')) {
+        return (
+          <div key={i} style={{ display: 'flex', gap: '6px', marginTop: '2px', marginLeft: '4px' }}>
+            <span style={{ color: 'var(--accent)' }}>•</span>
+            <span style={{ flex: 1, fontWeight: 500 }}>{tLine.substring(2)}</span>
+          </div>
+        );
+      }
+      return <div key={i} style={{ minHeight: line ? '18px' : '8px', marginTop: i > 0 && !line ? '4px' : 0 }}>{line}</div>;
+    });
+  };
+
   const handleSave = async () => {
     if (!formData.descripcion.trim()) return alert('Indica qué material o qué se necesita.');
     if (!formData.trabajadorId) return alert('Selecciona el trabajador solicitante.');
-    const docId = selectedPedido ? selectedPedido.id : generateId();
-    const base = {
-      ...formData,
-      id: docId,
-      solicitante: userEmail || '',
-      solicitanteNombre: userName || userEmail || 'Usuario',
-    };
-    const docData = selectedPedido
-      ? base
-      : { ...base, estado: 'pedido', createdAt: new Date().toISOString() };
-    await saveDoc('pedidos', docId, docData);
+    
+    setIsSaving(true);
+    try {
+      const docId = selectedPedido ? selectedPedido.id : generateId();
+      const base = {
+        ...formData,
+        id: docId,
+        solicitante: userEmail || '',
+        solicitanteNombre: userName || userEmail || 'Usuario',
+      };
+      const docData = selectedPedido
+        ? base
+        : { ...base, estado: 'pedido', createdAt: new Date().toISOString() };
+      await saveDoc('pedidos', docId, docData);
 
-    if (!selectedPedido) {
-      const usuarios = data?.config?.usuarios || [];
-      const destinatarios = usuarios
-        .filter(u => u.rol === 'logistica' && u.activo !== false)
-        .map(u => u.email)
-        .filter(Boolean);
-      if (destinatarios.length > 0) {
-        const notifId = 'NOTIF-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
-        const obraName = obras.find(o => o.id === formData.obraId)?.nombre || 'Almacén Central';
-        const urgenteTxt = formData.prioridad === 'urgente' ? '⚡ URGENTE — ' : '';
-        await saveDoc('notificaciones', notifId, {
-          id: notifId,
-          tipo: formData.prioridad === 'urgente' ? 'alerta' : 'info',
-          mensaje: `${urgenteTxt}Nuevo pedido de ${base.solicitanteNombre}: "${formData.descripcion}" (${obraName})`,
-          leida: false,
-          fecha: new Date().toISOString(),
-          link: '/pedidos',
-          destinatarios
-        });
+      if (!selectedPedido) {
+        const usuarios = data?.config?.usuarios || [];
+        const destinatarios = usuarios
+          .filter(u => u.rol === 'logistica' && u.activo !== false)
+          .map(u => u.email)
+          .filter(Boolean);
+        if (destinatarios.length > 0) {
+          const notifId = 'NOTIF-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+          const obraName = obras.find(o => o.id === formData.obraId)?.nombre || 'Almacén Central';
+          const urgenteTxt = formData.prioridad === 'urgente' ? '⚡ URGENTE — ' : '';
+          await saveDoc('notificaciones', notifId, {
+            id: notifId,
+            tipo: formData.prioridad === 'urgente' ? 'alerta' : 'info',
+            mensaje: `${urgenteTxt}Nuevo pedido de ${base.solicitanteNombre}: "${formData.descripcion}" (${obraName})`,
+            leida: false,
+            fecha: new Date().toISOString(),
+            link: '/pedidos',
+            destinatarios
+          });
+        }
+
+        // Notificación al trabajador solicitante si tiene contacto
+        const trabajador = trabajadores.find(t => t.id === formData.trabajadorId);
+        if (trabajador && (trabajador.email || trabajador.telefono)) {
+          const obraNombre = obras.find(o => o.id === formData.obraId)?.nombre || 'Almacén Central';
+          setIsModalOpen(false);
+          setSelectedPedido(null);
+          setNotifyModal({ trabajador, pedido: docData, obraNombre });
+          return;
+        }
       }
 
-      // Notificación al trabajador solicitante si tiene contacto
-      const trabajador = trabajadores.find(t => t.id === formData.trabajadorId);
-      if (trabajador && (trabajador.email || trabajador.telefono)) {
-        const obraNombre = obras.find(o => o.id === formData.obraId)?.nombre || 'Almacén Central';
-        setIsModalOpen(false);
-        setSelectedPedido(null);
-        setNotifyModal({ trabajador, pedido: docData, obraNombre });
-        return;
-      }
+      setIsModalOpen(false);
+      setSelectedPedido(null);
+    } catch (e) {
+      console.error(e);
+      alert('Error guardando la solicitud.');
+    } finally {
+      setIsSaving(false);
     }
-
-    setIsModalOpen(false);
-    setSelectedPedido(null);
   };
 
   const handleAlbaranUpload = async (e) => {
@@ -197,8 +223,10 @@ export default function Pedidos({ data, setData, userName, userEmail }) {
             {pedidos.map(p => (
               <tr key={p.id}>
                 <td>
-                  <div style={{ fontWeight: 600, color: 'var(--text-main)', maxWidth: '280px' }}>{p.descripcion || `${p.cantidad || ''} ${p.material || ''}`.trim()}</div>
-                  {p.notas && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', maxWidth: '280px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.notas}</div>}
+                  <div style={{ fontWeight: 600, color: 'var(--text-main)', maxWidth: '280px' }}>
+                    {renderDescripcion(p.descripcion || `${p.cantidad || ''} ${p.material || ''}`.trim())}
+                  </div>
+                  {p.notas && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '280px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.notas}</div>}
                 </td>
                 <td>{prioridadBadge(p.prioridad)}</td>
                 <td style={{ fontSize: '12px', fontWeight: 500 }}>{getObraName(p.obraId)}</td>
@@ -211,9 +239,13 @@ export default function Pedidos({ data, setData, userName, userEmail }) {
                 </td>
                 <td>
                   <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                    {p.estado !== 'entregado' && (
-                      <button onClick={() => markEntregado(p.id)} className="btn-secondary" style={{ padding: '4px 8px', fontSize: '10px', color: '#16a34a', borderColor: '#bbf7d0', background: '#f0fdf4' }}>
+                    {p.estado !== 'entregado' ? (
+                      <button onClick={async () => await updateDoc('pedidos', p.id, { estado: 'entregado' })} className="btn-secondary" style={{ padding: '4px 8px', fontSize: '10px', color: '#16a34a', borderColor: '#bbf7d0', background: '#f0fdf4' }}>
                         <PackageCheck size={12} /> Entregado
+                      </button>
+                    ) : (
+                      <button onClick={async () => await updateDoc('pedidos', p.id, { estado: 'pedido' })} className="btn-secondary" style={{ padding: '4px 8px', fontSize: '10px', color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }}>
+                        <ShoppingCart size={12} /> Marcar pdte.
                       </button>
                     )}
                     <button className="icon-btn" onClick={() => openForm(p)} title="Editar"><Edit2 size={14} /></button>
@@ -356,10 +388,16 @@ export default function Pedidos({ data, setData, userName, userEmail }) {
 
               {/* Trabajador solicitante */}
               <div className="form-group full-width">
-                <label>Trabajador solicitante *</label>
+                <label>¿A quién le solicitas el pedido? *</label>
                 <select value={formData.trabajadorId} onChange={handleInputChange('trabajadorId')}>
                   <option value="">Seleccionar trabajador...</option>
-                  {trabajadores.map(t => (
+                  {[...trabajadores]
+                    .sort((a, b) => {
+                      const nameA = `${a.nombre} ${a.apellidos || ''}`.trim().toLowerCase();
+                      const nameB = `${b.nombre} ${b.apellidos || ''}`.trim().toLowerCase();
+                      return nameA.localeCompare(nameB);
+                    })
+                    .map(t => (
                     <option key={t.id} value={t.id}>{t.nombre} {t.apellidos || ''}</option>
                   ))}
                 </select>
@@ -393,8 +431,10 @@ export default function Pedidos({ data, setData, userName, userEmail }) {
 
             </div>
             <div className="modal-footer">
-              <button className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cancelar</button>
-              <button className="btn-primary" onClick={handleSave}>{selectedPedido ? 'Actualizar' : 'Enviar Solicitud'}</button>
+              <button className="btn-secondary" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Cancelar</button>
+              <button className="btn-primary" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite', marginRight: '6px' }} /> Guardando...</> : (selectedPedido ? 'Actualizar' : 'Enviar Solicitud')}
+              </button>
             </div>
           </div>
         </div>

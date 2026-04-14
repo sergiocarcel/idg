@@ -19,7 +19,7 @@ export async function blobToBase64(blob) {
   });
 }
 
-export async function createAndSendSigningRequest(base64Pdf, cliente, docName, pageNumber = 1) {
+export async function createAndSendSigningRequest(base64Pdf, cliente, docName, pageNumber = 1, customY = 9) {
   const nameParts = (cliente.nombre || '').trim().split(' ');
   const firstName = nameParts[0] || 'Cliente';
   const lastName = nameParts.slice(1).join(' ') || '-';
@@ -40,18 +40,17 @@ export async function createAndSendSigningRequest(base64Pdf, cliente, docName, p
     fields: [
       {
         // El bloque de firmas siempre ocupa su propia última página (pageBreakBefore: always).
-        // Con margin:10mm + paddingTop:40px + label ~12px, el hueco "Conforme del cliente" empieza en y≈9%
         type: 'signature',
         recipient_id: 'temp_1',
         page_number: pageNumber,
-        position: { x: 55, y: 9, width: 35, height: 10 },
+        position: { x: 55, y: customY, width: 35, height: 10 },
         required: true,
       },
       {
         type: 'date',
         recipient_id: 'temp_1',
         page_number: pageNumber,
-        position: { x: 55, y: 20, width: 20, height: 5 },
+        position: { x: 55, y: customY + 11, width: 20, height: 5 },
         required: true,
         date_signing_default: true,
       },

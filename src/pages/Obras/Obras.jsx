@@ -172,48 +172,66 @@ export default function Obras({ data, setData }) {
               {obras.length === 0 && (
                 <tr><td colSpan="6" style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>No hay obras registradas</td></tr>
               )}
-              {obras.map(o => {
-                const isSelected = selectedObra?.id === o.id;
-                return (
-                  <tr
-                    key={o.id}
-                    onClick={() => setSelectedObra(isSelected ? null : o)}
-                    className={isSelected ? 'selected-row' : ''}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <td>
-                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                        <div style={{ width: '4px', height: '36px', borderRadius: '4px', background: o.color || '#2563eb', flexShrink: 0 }} />
-                        <div>
-                          <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{o.nombre}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{o.id} · {o.responsable || 'Sin responsable'}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>{getClientName(o.clienteId)}</td>
-                    <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      <div>{o.inicio ? new Date(o.inicio).toLocaleDateString() : '—'}</div>
-                      <div>{o.fin ? new Date(o.fin).toLocaleDateString() : '—'}</div>
-                    </td>
-                    <td style={{ width: '120px' }}>
+              {Object.entries(
+                obras.reduce((acc, o) => {
+                  const clienteName = getClientName(o.clienteId);
+                  if (!acc[clienteName]) acc[clienteName] = [];
+                  acc[clienteName].push(o);
+                  return acc;
+                }, {})
+              ).sort(([a], [b]) => a.localeCompare(b)).map(([clientName, clientObras]) => (
+                <React.Fragment key={clientName}>
+                  <tr style={{ background: '#f8fafc' }}>
+                    <td colSpan="6" style={{ padding: '10px 16px', fontWeight: 700, color: '#334155', borderTop: '2px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ flex: 1, height: '6px', background: '#e4e4e7', borderRadius: '3px', overflow: 'hidden' }}>
-                          <div style={{ width: `${o.avance}%`, height: '100%', background: o.color || '#2563eb', borderRadius: '3px' }} />
-                        </div>
-                        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', width: '30px' }}>{o.avance}%</span>
-                      </div>
-                    </td>
-                    <td>{estadoBadge(o.estado)}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                        <button className="icon-btn" onClick={(e) => { e.stopPropagation(); setGanttModalObra(o); }} title="Cronograma Gantt"><Calendar size={14} /></button>
-                        <button className="icon-btn" onClick={(e) => { e.stopPropagation(); openForm(o); }}><Edit2 size={14} /></button>
-                        <button className="icon-btn danger" onClick={(e) => { e.stopPropagation(); handleDelete(o.id); }}><Trash2 size={14} /></button>
+                        <User size={14} style={{ color: '#64748b' }} /> {clientName}
                       </div>
                     </td>
                   </tr>
-                )}
-              )}
+                  {clientObras.map(o => {
+                    const isSelected = selectedObra?.id === o.id;
+                    return (
+                      <tr
+                        key={o.id}
+                        onClick={() => setSelectedObra(isSelected ? null : o)}
+                        className={isSelected ? 'selected-row' : ''}
+                        style={{ cursor: 'pointer', background: isSelected ? '#eff6ff' : 'transparent', boxShadow: isSelected ? 'inset 4px 0 0 #3b82f6' : 'none' }}
+                      >
+                        <td>
+                          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                            <div style={{ width: '4px', height: '36px', borderRadius: '4px', background: o.color || '#2563eb', flexShrink: 0 }} />
+                            <div>
+                              <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{o.nombre}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{o.id} · {o.responsable || 'Sin responsable'}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{getClientName(o.clienteId)}</td>
+                        <td style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                          <div>{o.inicio ? new Date(o.inicio).toLocaleDateString() : '—'}</div>
+                          <div>{o.fin ? new Date(o.fin).toLocaleDateString() : '—'}</div>
+                        </td>
+                        <td style={{ width: '120px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ flex: 1, height: '6px', background: '#e4e4e7', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div style={{ width: `${o.avance}%`, height: '100%', background: o.color || '#2563eb', borderRadius: '3px' }} />
+                            </div>
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', width: '30px' }}>{o.avance}%</span>
+                          </div>
+                        </td>
+                        <td>{estadoBadge(o.estado)}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                            <button className="icon-btn" onClick={(e) => { e.stopPropagation(); setGanttModalObra(o); }} title="Cronograma Gantt"><Calendar size={14} /></button>
+                            <button className="icon-btn" onClick={(e) => { e.stopPropagation(); openForm(o); }}><Edit2 size={14} /></button>
+                            <button className="icon-btn danger" onClick={(e) => { e.stopPropagation(); handleDelete(o.id); }}><Trash2 size={14} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
             </tbody>
           </table>
         </div>

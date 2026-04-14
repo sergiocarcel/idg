@@ -9,7 +9,7 @@ export default function Clientes({ data, setData }) {
   const [selectedClient, setSelectedClient] = useState(null);
   const [editId, setEditId] = useState(null);
   
-  const initialForm = { nombre: '', nif: '', telefono: '', email: '', direccion: '', notas: '' };
+  const initialForm = { nombre: '', nif: '', telefono: '', email: '', direccion: '', codigoPostal: '', poblacion: '', provincia: '', pais: 'España', notas: '' };
   const [formData, setFormData] = useState(initialForm);
 
   const clientes = data?.clientes || [];
@@ -91,7 +91,7 @@ export default function Clientes({ data, setData }) {
                   >
                     <td>
                       <div style={{ fontWeight: 600, color: 'var(--text-main)'}}>{c.nombre}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px'}}>{c.direccion}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px'}}>{[c.direccion, c.codigoPostal, c.poblacion, c.provincia, c.pais].filter(Boolean).join(', ')}</div>
                     </td>
                     <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.nif}</td>
                     <td>{c.telefono}</td>
@@ -121,7 +121,7 @@ export default function Clientes({ data, setData }) {
                 ['NIF', selectedClient.nif],
                 ['Teléfono', selectedClient.telefono],
                 ['Email', selectedClient.email],
-                ['Dirección', selectedClient.direccion]
+                ['Dirección', [selectedClient.direccion, selectedClient.codigoPostal, selectedClient.poblacion, selectedClient.provincia, selectedClient.pais].filter(Boolean).join(', ')]
               ].map(([lbl, val]) => val && (
                 <div key={lbl} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: '13px', alignItems: 'center' }}>
                   <span style={{ color: 'var(--text-muted)' }}>{lbl}</span>
@@ -229,9 +229,28 @@ export default function Clientes({ data, setData }) {
                 <label>Email</label>
                 <input type="email" value={formData.email} onChange={handleInputChange('email')} placeholder="email@cliente.es" />
               </div>
+              <div className="form-group full-width" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', marginTop: '8px' }}>
+                <h4 style={{ fontSize: '13px', color: 'var(--text-main)', marginBottom: '12px' }}>Datos de Dirección</h4>
+              </div>
+              <div className="form-group full-width">
+                <label>Dirección (Calle, número, puerta)</label>
+                <input type="text" value={formData.direccion} onChange={handleInputChange('direccion')} placeholder="Ej: C/ Mayor, 12, 3ºA" />
+              </div>
               <div className="form-group half-width">
-                <label>Dirección</label>
-                <input type="text" value={formData.direccion} onChange={handleInputChange('direccion')} placeholder="Calle, número, ciudad" />
+                <label>Código Postal</label>
+                <input type="text" value={formData.codigoPostal || ''} onChange={handleInputChange('codigoPostal')} placeholder="Ej: 28001" />
+              </div>
+              <div className="form-group half-width">
+                <label>Población</label>
+                <input type="text" value={formData.poblacion || ''} onChange={handleInputChange('poblacion')} placeholder="Ej: Madrid" />
+              </div>
+              <div className="form-group half-width">
+                <label>Provincia</label>
+                <input type="text" value={formData.provincia || ''} onChange={handleInputChange('provincia')} placeholder="Ej: Madrid" />
+              </div>
+              <div className="form-group half-width">
+                <label>País</label>
+                <input type="text" value={formData.pais || ''} onChange={handleInputChange('pais')} placeholder="Ej: España" />
               </div>
               <div className="form-group full-width">
                 <label>Notas / Observaciones</label>

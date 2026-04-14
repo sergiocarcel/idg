@@ -1,6 +1,41 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Plus, Trash2, ArrowUp, ArrowDown, Save, FileText, LayoutTemplate, Trash } from 'lucide-react';
 import { deleteDoc } from '../../services/db';
+
+function ContentEditableCell({ initialValue, onChange, onFocus, onBlur, placeholder }) {
+  const ref = useRef(null);
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (ref.current && !focused && ref.current.innerHTML !== (initialValue || '')) {
+      ref.current.innerHTML = initialValue || '';
+    }
+  }, [initialValue, focused]);
+
+  return (
+    <div style={{ position: 'relative' }}>
+       <div style={{ display: 'flex', gap: '4px', marginBottom: '4px', position: 'absolute', top: '-24px', left: 0, opacity: focused ? 1 : 0, transition: 'opacity 0.2s', pointerEvents: focused ? 'auto' : 'none', background: '#fff', padding: '2px', border: '1px solid var(--border)', borderRadius: '4px', zIndex: 10 }}>
+        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => document.execCommand('bold', false, null)} style={{ padding: '2px 6px', fontWeight: 700, fontSize: '10px', border: 'none', background: 'transparent', cursor: 'pointer' }}>B</button>
+        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => document.execCommand('italic', false, null)} style={{ padding: '2px 6px', fontStyle: 'italic', fontSize: '10px', border: 'none', background: 'transparent', cursor: 'pointer' }}>I</button>
+      </div>
+      <div
+        ref={ref}
+        contentEditable
+        suppressContentEditableWarning
+        onFocus={() => { setFocused(true); if(onFocus) onFocus(); }}
+        onBlur={(e) => { 
+          setFocused(false); 
+          onChange(e.currentTarget.innerHTML); 
+          if(onBlur) onBlur(); 
+        }}
+        onInput={(e) => onChange(e.currentTarget.innerHTML)}
+        dangerouslySetInnerHTML={{ __html: initialValue || '' }}
+        style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: '6px', minHeight: '34px', outline: 'none', fontFamily: 'inherit', fontSize: '13px', lineHeight: '1.4', background: '#fff', cursor: 'text' }}
+        data-placeholder={placeholder}
+      />
+    </div>
+  );
+}
 
 export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave, onClose }) {
   const [activeSearch, setActiveSearch] = useState({ capIdx: null, partIdx: null });
@@ -64,7 +99,7 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
 
   const updatePartida = (capIndex, partIndex, field, value) => {
     const newCaps = [...formData.capitulos];
-    const val = (field === 'descripcion' || field === 'unidad') ? value : (parseFloat(value) || 0);
+    const val = (field === 'descripcion' || field === 'unidad') ? value : (value === '' ? '' : (parseFloat(value) || 0));
     newCaps[capIndex].partidas[partIndex][field] = val;
     setFormData({ ...formData, capitulos: newCaps });
   };
@@ -104,7 +139,7 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
 
   const updatePartidaExtra = (extIdx, partIdx, field, value) => {
     const newExtras = [...(formData.extras || [])];
-    const val = (field === 'descripcion' || field === 'unidad') ? value : (parseFloat(value) || 0);
+    const val = (field === 'descripcion' || field === 'unidad') ? value : (value === '' ? '' : (parseFloat(value) || 0));
     newExtras[extIdx].partidas[partIdx][field] = val;
     setFormData({ ...formData, extras: newExtras });
   };
@@ -258,14 +293,11 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
                         <tr key={partIdx} style={{ borderBottom: '1px solid var(--border)' }}>
                           <td style={{ padding: '6px 0' }}>
                             <div style={{ position: 'relative' }}>
-                              <textarea
-                                rows={1}
-                                value={partida.descripcion || ''}
-                                onChange={(e) => { updatePartida(capIdx, partIdx, 'descripcion', e.target.value); autoResize(e.target); }}
-                                onFocus={(e) => { setActiveSearch({ capIdx, partIdx }); autoResize(e.target); }}
+                              <ContentEditableCell
+                                initialValue={partida.descripcion || ''}
+                                onChange={(val) => updatePartida(capIdx, partIdx, 'descripcion', val)}
+                                onFocus={() => setActiveSearch({ capIdx, partIdx })}
                                 onBlur={() => setTimeout(() => setActiveSearch({ capIdx: null, partIdx: null }), 200)}
-                                ref={el => autoResize(el)}
-                                style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: '6px', resize: 'none', overflow: 'hidden', fontFamily: 'inherit', fontSize: '13px', lineHeight: '1.4' }}
                                 placeholder="Escribe para buscar o añade libremente..."
                               />
                               
@@ -299,20 +331,20 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
                             />
                           </td>
                           <td style={{ padding: '6px 8px' }}>
-                            <input
-                              type="number" value={partida.cantidad}
-                              onChange={(e) => updatePartida(capIdx, partIdx, 'cantidad', e.target.value)}
-                              onFocus={(e) => e.target.select()}
-                              style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center' }}
-                            />
+                              <input
+                                type="number" step="any" value={partida.cantidad === '' ? '' : partida.cantidad}
+                                onChange={(e) => updatePartida(capIdx, partIdx, 'cantidad', e.target.value)}
+                                onFocus={(e) => e.target.value === '1' ? e.target.select() : e.target.select()}
+                                style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center' }}
+                              />
                           </td>
                           <td style={{ padding: '6px 8px' }}>
-                            <input
-                              type="number" value={partida.precioVenta}
-                              onChange={(e) => updatePartida(capIdx, partIdx, 'precioVenta', e.target.value)}
-                              onFocus={(e) => e.target.select()}
-                              style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'right' }}
-                            />
+                              <input
+                                type="number" step="any" value={partida.precioVenta === '' ? '' : partida.precioVenta}
+                                onChange={(e) => updatePartida(capIdx, partIdx, 'precioVenta', e.target.value)}
+                                onFocus={(e) => e.target.select()}
+                                style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'right' }}
+                              />
                           </td>
                           <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 600 }}>
                             {formatCurrency(partida.cantidad * partida.precioVenta)}
@@ -387,13 +419,9 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
                         {ext.partidas.map((partida, partIdx) => (
                           <tr key={partIdx} style={{ borderBottom: '1px solid var(--border)' }}>
                             <td style={{ padding: '6px 0' }}>
-                              <textarea
-                                rows={1}
-                                value={partida.descripcion || ''}
-                                onChange={(e) => { updatePartidaExtra(extIdx, partIdx, 'descripcion', e.target.value); autoResize(e.target); }}
-                                onFocus={(e) => autoResize(e.target)}
-                                ref={el => autoResize(el)}
-                                style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: '6px', resize: 'none', overflow: 'hidden', fontFamily: 'inherit', fontSize: '13px', lineHeight: '1.4' }}
+                              <ContentEditableCell
+                                initialValue={partida.descripcion || ''}
+                                onChange={(val) => updatePartidaExtra(extIdx, partIdx, 'descripcion', val)}
                                 placeholder="Descripción del extra..."
                               />
                             </td>
@@ -401,10 +429,10 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
                               <input type="text" value={partida.unidad || ''} placeholder="ud" onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'unidad', e.target.value)} onFocus={(e) => e.target.select()} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center', fontSize: '13px' }} />
                             </td>
                             <td style={{ padding: '6px 8px' }}>
-                              <input type="number" value={partida.cantidad} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'cantidad', e.target.value)} onFocus={(e) => e.target.select()} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center' }} />
+                              <input type="number" step="any" value={partida.cantidad === '' ? '' : partida.cantidad} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'cantidad', e.target.value)} onFocus={(e) => e.target.select()} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center' }} />
                             </td>
                             <td style={{ padding: '6px 8px' }}>
-                              <input type="number" value={partida.precioVenta} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'precioVenta', e.target.value)} onFocus={(e) => e.target.select()} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'right' }} />
+                              <input type="number" step="any" value={partida.precioVenta === '' ? '' : partida.precioVenta} onChange={(e) => updatePartidaExtra(extIdx, partIdx, 'precioVenta', e.target.value)} onFocus={(e) => e.target.select()} style={{ width: '100%', padding: '6px', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'right' }} />
                             </td>
                             <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 600 }}>{formatCurrency(partida.cantidad * partida.precioVenta)}</td>
                             <td style={{ padding: '6px 0', textAlign: 'right' }}>

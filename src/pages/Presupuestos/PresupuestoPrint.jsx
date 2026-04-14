@@ -231,34 +231,38 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
           </div>
         )}
 
-        {/* Condiciones / Notas — solo en modo cliente */}
-        <PdfFooter
-          empresa={data?.config?.empresa}
-          extraText={mode === 'cliente' ? `<strong>Condiciones Generales:</strong><br />${ppto.condicionesPresupuesto || data?.config?.empresa?.condicionesPresupuesto || "Validez operativa del presupuesto: 30 días. Los precios no incluyen licencias ni permisos de obra a menos que se indique explícitamente en una partida."}` : undefined}
-        />
-
-        {/* Bloque de firmas — solo en modo cliente, siempre en página propia */}
+        {/* Condiciones y Firmas — solo en modo cliente, siempre en página propia */}
         {mode === 'cliente' && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '40px', pageBreakBefore: 'always', pageBreakInside: 'avoid' }}>
-            {/* Firma empresa */}
-            <div style={{ width: '45%' }}>
-              <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '10px' }}>Por la empresa:</div>
-              {companySignature ? (
-                <img src={companySignature} alt="Firma empresa" style={{ height: '80px', maxWidth: '100%', objectFit: 'contain', display: 'block', borderBottom: '1px solid #000' }} />
-              ) : (
+          <div style={{ pageBreakBefore: 'always', paddingTop: '40px' }}>
+            <PdfFooter
+              empresa={data?.config?.empresa}
+              extraText={`<strong>Condiciones Generales:</strong><br />${ppto.condicionesPresupuesto || data?.config?.empresa?.condicionesPresupuesto || "Validez operativa del presupuesto: 30 días. Los precios no incluyen licencias ni permisos de obra a menos que se indique explícitamente en una partida."}`}
+            />
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '40px', pageBreakInside: 'avoid' }}>
+              <div style={{ width: '45%' }}>
+                <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '10px' }}>Por la empresa:</div>
+                {companySignature ? (
+                  <img src={companySignature} alt="Firma empresa" style={{ height: '80px', maxWidth: '100%', objectFit: 'contain', display: 'block', borderBottom: '1px solid #000' }} />
+                ) : (
+                  <div style={{ height: '80px', borderBottom: '1px solid #000' }} />
+                )}
+                <div style={{ fontSize: '11px', marginTop: '6px', color: '#555' }}>
+                  Fdo: {data?.config?.empresa?.nombre || 'La empresa'}
+                </div>
+              </div>
+              <div style={{ width: '45%' }}>
+                <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '10px' }}>Conforme del cliente:</div>
                 <div style={{ height: '80px', borderBottom: '1px solid #000' }} />
-              )}
-              <div style={{ fontSize: '11px', marginTop: '6px', color: '#555' }}>
-                Fdo: {data?.config?.empresa?.nombre || 'La empresa'}
+                <div style={{ fontSize: '11px', marginTop: '6px', color: '#555' }}>Fdo: El cliente</div>
               </div>
             </div>
-            {/* Firma cliente */}
-            <div style={{ width: '45%' }}>
-              <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '10px' }}>Conforme del cliente:</div>
-              <div style={{ height: '80px', borderBottom: '1px solid #000' }} />
-              <div style={{ fontSize: '11px', marginTop: '6px', color: '#555' }}>Fdo: El cliente</div>
-            </div>
           </div>
+        )}
+        
+        {/* Footer genérico para otras versiones (sin condiciones) */}
+        {mode !== 'cliente' && (
+          <PdfFooter empresa={data?.config?.empresa} />
         )}
 
     </div>

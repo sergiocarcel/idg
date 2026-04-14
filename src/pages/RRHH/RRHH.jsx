@@ -1,18 +1,25 @@
 import React, { useState } from 'react';
-import { Plus, FolderOpen, AlertTriangle, FileText, DownloadCloud, Trash2, Send, X, PenTool, MessageCircle, Mail } from 'lucide-react';
+import { Plus, FolderOpen, AlertTriangle, FileText, DownloadCloud, Trash2, Send, X, PenTool, MessageCircle, Mail, Folder, CornerLeftUp, MoveRight, FolderPlus, RefreshCw, Paperclip } from 'lucide-react';
 import { saveDoc, deleteDoc } from '../../services/db';
 import { openWhatsApp, sendEmail } from '../../utils/sendUtils';
 import SignatureFlow from '../../components/shared/SignatureFlow.jsx';
+import FirmaDevModalRRHH from '../../components/shared/FirmaDevModalRRHH.jsx';
+import { FileSignature } from 'lucide-react';
+import { checkSigningStatus } from '../../services/firmadev';
 
 export default function RRHH({ data, setData }) {
   const [activeCategory, setActiveCategory] = useState('contratos');
+  const [activeSubfolder, setActiveSubfolder] = useState(null);
+  const [fileToMove, setFileToMove] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ nombre: '', categoria: 'contratos', subcategoria: '', fechaVencimiento: '', coste: '', archivoUrl: '' });
   const [newCategoryName, setNewCategoryName] = useState('');
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [signatureDoc, setSignatureDoc] = useState(null);
   const [sendDocModal, setSendDocModal] = useState(null);
+  const [firmaDevModalDoc, setFirmaDevModalDoc] = useState(null);
   const [selectedTrabajadorId, setSelectedTrabajadorId] = useState('');
+  const [checkingFirma, setCheckingFirma] = useState(null);
 
   const documentos = data?.documentosRRHH || [];
   const trabajadores = data?.trabajadores || [];
@@ -57,6 +64,68 @@ export default function RRHH({ data, setData }) {
     await deleteDoc('documentosRRHH', id);
   };
 
+  const handleCreateSubfolder = async () => {
+    const name = prompt("Nombre de la nueva subcarpeta:");
+    if (!name) return;
+    const newFolder = {
+      id: 'FOLDER-' + Date.now(),
+      nombre: name,
+      isFolder: true,
+      categoria: activeCategory,
+      fechaSubida: new Date().toISOString()
+    };
+    await saveDoc('documentosRRHH', newFolder.id, newFolder);
+  };
+
+  const handleMoveFileAction = async (targetCategoria, targetSubcategoria) => {
+    if (!fileToMove) return;
+    try {
+      const upd = { ...fileToMove, categoria: targetCategoria, subcategoria: targetSubcategoria || '' };
+      await saveDoc('documentosRRHH', fileToMove.id, upd);
+    } catch(err) {
+      console.error(err);
+      alert('Error moviendo el archivo');
+    } finally {
+      setFileToMove(null);
+    }
+  };
+
+  const handleCheckFirma = async (doc) => {
+    setCheckingFirma(doc.id);
+    try {
+      const statusData = await checkSigningStatus(doc.firmaRequestId);
+      const finished = statusData.status?.finished === true || statusData.finished === true;
+      const declined = statusData.status?.declined === true || statusData.declined === true;
+      const signedDocUrl = statusData.final_document_download_url || statusData.document_only_download_url;
+
+      if (finished && signedDocUrl) {
+        const pdfBlob = await fetch(signedDocUrl).then(r => r.blob());
+        const fd = new FormData();
+        fd.append('file', pdfBlob, `${doc.nombre}_FIRMADO.pdf`);
+        fd.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+        fd.append('folder', `rrhh/${doc.id}`);
+        const uploaded = await fetch(`https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/auto/upload`, { method: 'POST', body: fd }).then(r => r.json());
+        if (uploaded.error) throw new Error(uploaded.error.message);
+
+        await saveDoc('documentosRRHH', doc.id, {
+          ...doc,
+          firmaEstadofirmaDev: 'firmado',
+          pdfFirmadoUrl: uploaded.secure_url,
+          firmaFechaFirmado: new Date().toISOString(),
+        });
+        alert('✅ El documento ha sido firmado y guardado.');
+      } else if (declined) {
+        await saveDoc('documentosRRHH', doc.id, { ...doc, firmaEstadofirmaDev: 'rechazado' });
+        alert('❌ La firma ha sido rechazada.');
+      } else {
+        alert('⏳ Todavía no se ha firmado el documento.');
+      }
+    } catch (err) {
+      alert('Error comprobando estado de firma: ' + (err.message || 'Error desconocido'));
+    }
+    setCheckingFirma(null);
+  };
+
   const defaultCategories = [
     { id: 'contratos', label: 'Contratos Personal', color: '#3b82f6' },
     { id: 'vehiculos', label: 'Vehículos Reales', color: '#10b981' },
@@ -98,7 +167,30 @@ export default function RRHH({ data, setData }) {
     return FV <= limite;
   }).sort((a,b) => new Date(a.fechaVencimiento) - new Date(b.fechaVencimiento));
 
-  const docsMostrados = activeCategory === 'todas' ? documentos : documentos.filter(d => d.categoria === activeCategory);
+  const docsInCurrentView = activeCategory === 'todas' 
+    ? documentos.filter(d => !d.isFolder)
+    : activeSubfolder 
+      ? documentos.filter(d => !d.isFolder && d.categoria === activeCategory && d.subcategoria === activeSubfolder)
+      : documentos.filter(d => !d.isFolder && d.categoria === activeCategory && (!d.subcategoria || d.subcategoria === ''));
+
+  const foldersInCurrentView = activeCategory === 'todas'
+    ? []
+    : activeSubfolder
+      ? []
+      : documentos.filter(d => d.isFolder && d.categoria === activeCategory);
+
+  const computedFolders = new Set();
+  documentos.forEach(d => {
+    if (!d.isFolder && d.categoria === activeCategory && d.subcategoria && activeSubfolder === null) {
+      computedFolders.add(d.subcategoria);
+    }
+  });
+  foldersInCurrentView.forEach(f => computedFolders.delete(f.nombre));
+
+  const allSubfolders = [
+    ...foldersInCurrentView.map(f => ({ id: f.id, name: f.nombre, explicit: true })),
+    ...Array.from(computedFolders).map(name => ({ id: name, name, explicit: false }))
+  ];
 
   const formatCurrency = (val) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(val || 0);
 
@@ -110,10 +202,15 @@ export default function RRHH({ data, setData }) {
           <p className="page-subtitle">Documentación legal cruzada, caducidades y recursos productivos.</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
+          {activeCategory !== 'todas' && !activeSubfolder && (
+            <button className="btn-secondary" onClick={handleCreateSubfolder}>
+              <FolderPlus size={14} /> Nueva Subcarpeta
+            </button>
+          )}
           <button className="btn-secondary" onClick={() => setShowAddCategory(true)}>
             <Plus size={14} /> Nueva Carpeta
           </button>
-          <button className="btn-primary" onClick={() => { setFormData({...formData, categoria: activeCategory === 'todas' ? 'contratos' : activeCategory}); setIsModalOpen(true); }}>
+          <button className="btn-primary" onClick={() => { setFormData({...formData, categoria: activeCategory === 'todas' ? 'contratos' : activeCategory, subcategoria: activeSubfolder || ''}); setIsModalOpen(true); }}>
             <Plus size={16} /> Subir Documento
           </button>
         </div>
@@ -149,7 +246,7 @@ export default function RRHH({ data, setData }) {
       {/* Carpetas Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
         <button 
-          onClick={() => setActiveCategory('todas')}
+          onClick={() => { setActiveCategory('todas'); setActiveSubfolder(null); }}
           style={{ background: activeCategory === 'todas' ? '#1e293b' : '#fff', color: activeCategory === 'todas' ? '#fff' : '#1e293b', border: activeCategory === 'todas' ? 'none' : '1px solid var(--border)', padding: '20px', borderRadius: '12px', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column', gap: '12px' }}
         >
           <FolderOpen size={24} style={{ color: activeCategory === 'todas' ? '#fff' : '#94a3b8' }} />
@@ -164,7 +261,7 @@ export default function RRHH({ data, setData }) {
           return (
             <button 
               key={c.id}
-              onClick={() => setActiveCategory(c.id)}
+              onClick={() => { setActiveCategory(c.id); setActiveSubfolder(null); }}
               style={{ background: isActive ? c.color : '#fff', color: isActive ? '#fff' : '#1e293b', border: isActive ? 'none' : '1px solid var(--border)', padding: '20px', borderRadius: '12px', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column', gap: '12px' }}
             >
               <FolderOpen size={24} style={{ color: isActive ? '#fff' : c.color }} />
@@ -195,10 +292,38 @@ export default function RRHH({ data, setData }) {
             </tr>
           </thead>
           <tbody>
-            {docsMostrados.length === 0 && (
-              <tr><td colSpan="5" style={{textAlign:'center', padding:'32px', color:'#94a3b8'}}>No hay documentos almacenados en esta carpeta.</td></tr>
+            {docsInCurrentView.length === 0 && allSubfolders.length === 0 && (
+              <tr><td colSpan="5" style={{textAlign:'center', padding:'32px', color:'#94a3b8'}}>No hay documentos ni carpetas almacenados en esta vista.</td></tr>
             )}
-            {docsMostrados.map(d => (
+            {activeSubfolder && (
+              <tr onClick={() => setActiveSubfolder(null)} style={{ cursor: 'pointer', background: '#f8fafc' }} onMouseEnter={e => e.currentTarget.style.background='#f1f5f9'} onMouseLeave={e => e.currentTarget.style.background='#f8fafc'}>
+                <td colSpan="5">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b', fontSize: '13px', fontWeight: 500 }}>
+                    <CornerLeftUp size={16} /> Volver a {categories.find(c => c.id === activeCategory)?.label || activeCategory}
+                  </div>
+                </td>
+              </tr>
+            )}
+            {(activeCategory !== 'todas' && !activeSubfolder) && allSubfolders.map(folder => (
+              <tr key={folder.id} onClick={() => setActiveSubfolder(folder.name)} style={{ cursor: 'pointer', background: '#fff' }} onMouseEnter={e => e.currentTarget.style.background='#f1f5f9'} onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+                <td>
+                  <div style={{ fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Folder size={16} fill="#fef08a" color="#eab308" /> {folder.name}
+                  </div>
+                </td>
+                <td><span style={{ fontSize: '12px', fontWeight: 500, color: '#475569', background: '#e2e8f0', padding: '4px 8px', borderRadius: '4px' }}>Subcarpeta</span></td>
+                <td>—</td>
+                <td>—</td>
+                <td>
+                  {folder.explicit && (
+                     <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                       <button className="icon-btn danger" onClick={(e) => { e.stopPropagation(); handleDelete(folder.id); }}><Trash2 size={14} /></button>
+                     </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {docsInCurrentView.map(d => (
               <tr key={d.id}>
                 <td>
                   <div style={{ fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -215,10 +340,40 @@ export default function RRHH({ data, setData }) {
                   ) : (
                     <span style={{ color: '#94a3b8', fontSize: '12px' }}>Sin caducidad</span>
                   )}
+                  {d.firmaEstadofirmaDev === 'enviado' && (
+                    <div style={{ marginTop: '4px' }}>
+                      <span style={{ background: '#fef3c7', color: '#d97706', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <FileSignature size={10} /> Pte. firma
+                      </span>
+                    </div>
+                  )}
+                  {d.firmaEstadofirmaDev === 'firmado' && d.pdfFirmadoUrl && (
+                    <div style={{ marginTop: '4px' }}>
+                      <a href={d.pdfFirmadoUrl} target="_blank" rel="noopener noreferrer" title="Ver PDF firmado"
+                        style={{ background: '#dcfce7', color: '#16a34a', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px', textDecoration: 'none' }}>
+                        <FileSignature size={10} /> Firmado <Paperclip size={9} />
+                      </a>
+                    </div>
+                  )}
+                  {d.firmaEstadofirmaDev === 'rechazado' && (
+                    <div style={{ marginTop: '4px' }}>
+                      <span style={{ background: '#fef2f2', color: '#dc2626', padding: '2px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <FileSignature size={10} /> Rechazada
+                      </span>
+                    </div>
+                  )}
                 </td>
                 <td style={{ fontWeight: 600 }}>{d.coste ? formatCurrency(d.coste) : '—'}</td>
                 <td>
                   <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    {d.firmaEstadofirmaDev === 'enviado' && (
+                      <button className="icon-btn" onClick={() => handleCheckFirma(d)} disabled={checkingFirma === d.id}
+                        title="Comprobar si ya ha firmado"
+                        style={{ color: '#d97706', borderColor: '#fcd34d' }}>
+                        {checkingFirma === d.id ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={14} />}
+                      </button>
+                    )}
+                    <button className="icon-btn" title="Mover documento" onClick={() => setFileToMove(d)} style={{ color: '#9333ea', background: '#f3e8ff' }}><MoveRight size={14} /></button>
                     {d.archivoUrl && (
                       <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '11px', color: '#3b82f6', borderColor: '#bfdbfe', background: '#eff6ff', display: 'flex', gap: '4px', alignItems: 'center' }}
                         onClick={() => { setSendDocModal(d); setSelectedTrabajadorId(''); }}>
@@ -226,7 +381,7 @@ export default function RRHH({ data, setData }) {
                       </button>
                     )}
                     {d.archivoUrl && (
-                      <button className="icon-btn" title="Enviar para firma" onClick={() => setSignatureDoc(d)} style={{ color: '#8b5cf6' }}><PenTool size={14} /></button>
+                      <button className="icon-btn" title="Enviar para firmar" onClick={() => setFirmaDevModalDoc(d)} style={{ color: '#7c3aed' }}><FileSignature size={14} /></button>
                     )}
                     <button className="icon-btn" title="Descargar" onClick={() => d.archivoUrl ? window.open(d.archivoUrl, '_blank') : alert('Este documento no tiene archivo adjunto.')}><DownloadCloud size={14} /></button>
                     <button className="icon-btn danger" onClick={() => handleDelete(d.id)}><Trash2 size={14} /></button>
@@ -402,6 +557,83 @@ export default function RRHH({ data, setData }) {
           </div>
         </div>
       )}
+
+      {/* Modal Firma.dev */}
+      {firmaDevModalDoc && (
+        <FirmaDevModalRRHH
+          document={firmaDevModalDoc}
+          trabajadores={trabajadores}
+          onClose={() => setFirmaDevModalDoc(null)}
+          onFirmaSuccess={async (firmaData) => {
+            // Guardar info del documento en DB para rastrear cuando esten firmados
+            // Podríamos actualizar el DOC si queremos. Yo lo actualizaré para poder ver "firmado por" luego si fuera necsario
+            await saveDoc('documentosRRHH', firmaDevModalDoc.id, { 
+              ...firmaDevModalDoc, 
+              firmaEstadofirmaDev: 'enviado',
+              firmaRequestId: firmaData.firmaRequestId,
+              firmaFechaEnvio: firmaData.firmaFecha,
+              firmaDestinatario: firmaData.workerId
+            });
+            setFirmaDevModalDoc(null);
+          }}
+        />
+      )}
+
+      {/* Modal Mover Archivo */}
+      {fileToMove && (
+        <div className="modal-overlay" style={{ zIndex: 110 }}>
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>Mover Documento</h2>
+              <button className="icon-btn" onClick={() => setFileToMove(null)} style={{ background: 'none' }}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                Selecciona el destino para <strong>{fileToMove.nombre}</strong>:
+              </p>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+                {categories.map(cat => {
+                  // Get subfolders for this category
+                  const catSubfolders = new Set();
+                  documentos.forEach(d => {
+                    if (d.categoria === cat.id && d.isFolder) catSubfolders.add(d.nombre);
+                    if (!d.isFolder && d.categoria === cat.id && d.subcategoria) catSubfolders.add(d.subcategoria);
+                  });
+                  return (
+                    <React.Fragment key={cat.id}>
+                      <button 
+                        onClick={() => handleMoveFileAction(cat.id, '')}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', background: (fileToMove.categoria === cat.id && !fileToMove.subcategoria) ? '#f8fafc' : '#fff', border: '1px solid var(--border)', borderRadius: '8px', cursor: (fileToMove.categoria === cat.id && !fileToMove.subcategoria) ? 'default' : 'pointer', opacity: (fileToMove.categoria === cat.id && !fileToMove.subcategoria) ? 0.6 : 1 }}
+                        disabled={(fileToMove.categoria === cat.id && !fileToMove.subcategoria)}
+                      >
+                        <FolderOpen size={18} fill={cat.color} color={cat.color} />
+                        <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-main)' }}>{cat.label}</span>
+                      </button>
+                      
+                      {Array.from(catSubfolders).map(subf => (
+                        <button 
+                          key={cat.id + '-' + subf}
+                          onClick={() => handleMoveFileAction(cat.id, subf)}
+                          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', paddingLeft: '32px', background: (fileToMove.categoria === cat.id && fileToMove.subcategoria === subf) ? '#f8fafc' : '#fff', border: '1px solid var(--border)', borderRadius: '8px', cursor: (fileToMove.categoria === cat.id && fileToMove.subcategoria === subf) ? 'default' : 'pointer', opacity: (fileToMove.categoria === cat.id && fileToMove.subcategoria === subf) ? 0.6 : 1 }}
+                          disabled={(fileToMove.categoria === cat.id && fileToMove.subcategoria === subf)}
+                        >
+                          <Folder size={18} fill="#fef08a" color="#eab308" />
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-main)' }}>{subf}</span>
+                            <span style={{ fontSize: '10px', color: '#94a3b8' }}>En {cat.label}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
