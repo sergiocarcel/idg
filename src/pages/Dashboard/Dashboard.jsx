@@ -10,10 +10,12 @@ import { saveDoc, deleteDoc } from '../../services/db';
 export default function Dashboard({ data, setData }) {
   const navigate = useNavigate();
   const [showTaskModal, setShowTaskModal] = useState(false);
-  const [newTask, setNewTask] = useState({ titulo: '', prioridad: 'media', fechaVencimiento: '' });
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [newTask, setNewTask] = useState({ titulo: '', prioridad: 'media', fechaVencimiento: '', asignadoA: '' });
 
   const obras = data?.obras || [];
   const presupuestos = data?.presupuestos || [];
+  const usuariosCRM = data?.config?.usuarios || [];
   const clientes = data?.clientes || [];
   const eventos = data?.eventos || [];
   const tareasPendientes = data?.tareasDashboard || [];
@@ -118,12 +120,29 @@ export default function Dashboard({ data, setData }) {
   // ══════════════════════════════════════
   // TAREAS PENDIENTES  (Firestore: col tareasDashboard)
   // ══════════════════════════════════════
-  const handleAddTask = async () => {
+  const handleSaveTask = async () => {
     if (!newTask.titulo.trim()) return;
-    const id = 'TASK-' + Date.now();
-    await saveDoc('tareasDashboard', id, { ...newTask, id, completada: false, fecha: new Date().toISOString() });
+    if (editingTaskId) {
+      await saveDoc('tareasDashboard', editingTaskId, { ...newTask });
+    } else {
+      const id = 'TASK-' + Date.now();
+      await saveDoc('tareasDashboard', id, { ...newTask, id, completada: false, fecha: new Date().toISOString() });
+    }
     setShowTaskModal(false);
-    setNewTask({ titulo: '', prioridad: 'media', fechaVencimiento: '' });
+    setEditingTaskId(null);
+    setNewTask({ titulo: '', prioridad: 'media', fechaVencimiento: '', asignadoA: '' });
+  };
+
+  const handleEditTask = (t) => {
+    setNewTask({ ...t });
+    setEditingTaskId(t.id);
+    setShowTaskModal(true);
+  };
+
+  const handleOpenNewTask = () => {
+    setNewTask({ titulo: '', prioridad: 'media', fechaVencimiento: '', asignadoA: '' });
+    setEditingTaskId(null);
+    setShowTaskModal(true);
   };
 
   const toggleTask = async (task) => {
@@ -177,7 +196,7 @@ export default function Dashboard({ data, setData }) {
             <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
               <CheckCircle2 size={16} style={{ color: '#16a34a' }} /> Tareas Pendientes
             </h3>
-            <button className="icon-btn" onClick={() => setShowTaskModal(true)} style={{ background: 'rgba(37,99,235,0.1)', color: '#2563eb' }}><Plus size={14} /></button>
+            <button className="icon-btn" onClick={handleOpenNewTask} style={{ background: 'rgba(37,99,235,0.1)', color: '#2563eb' }}><Plus size={14} /></button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', maxHeight: '280px' }}>
             {tareasPendientes.length === 0 ? (
@@ -193,9 +212,12 @@ export default function Dashboard({ data, setData }) {
                       <button onClick={() => toggleTask(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.completada ? '#16a34a' : '#cbd5e1', padding: 0 }}>
                         {t.completada ? <CheckCircle2 size={18} /> : <Circle size={18} />}
                       </button>
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => handleEditTask(t)}>
                         <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-main)', textDecoration: t.completada ? 'line-through' : 'none' }}>{t.titulo}</div>
-                        {t.fechaVencimiento && <div style={{ fontSize: '10px', color: semaforoColor, fontWeight: 600, marginTop: '2px' }}>{new Date(t.fechaVencimiento).toLocaleDateString('es-ES')}</div>}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                          {t.fechaVencimiento && <span style={{ fontSize: '10px', color: semaforoColor, fontWeight: 600 }}>{new Date(t.fechaVencimiento).toLocaleDateString('es-ES')}</span>}
+                          {t.asignadoA && <span style={{ fontSize: '10px', background: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: '10px' }}>🙋🏻‍♂️ {t.asignadoA}</span>}
+                        </div>
                       </div>
                       <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px',
                         background: t.prioridad === 'alta' ? '#fef2f2' : (t.prioridad === 'baja' ? '#f0fdf4' : '#fffbeb'),
@@ -358,7 +380,7 @@ export default function Dashboard({ data, setData }) {
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '400px' }}>
             <div className="modal-header">
-              <h2>Nueva Tarea</h2>
+              <h2>{editingTaskId ? 'Editar Tarea' : 'Nueva Tarea'}</h2>
               <button className="icon-btn" onClick={() => setShowTaskModal(false)} style={{ background: 'none' }}><X size={18} /></button>
             </div>
             <div className="modal-body form-grid">
@@ -378,10 +400,19 @@ export default function Dashboard({ data, setData }) {
                 <label>Fecha Vencimiento</label>
                 <input type="date" value={newTask.fechaVencimiento} onChange={e => setNewTask({...newTask, fechaVencimiento: e.target.value})} />
               </div>
+              <div className="form-group full-width">
+                <label>Asignado a</label>
+                <select value={newTask.asignadoA || ''} onChange={e => setNewTask({...newTask, asignadoA: e.target.value})}>
+                  <option value="">(Sin asignar)</option>
+                  {usuariosCRM.map((u, i) => (
+                    <option key={i} value={u.nombre || u.email}>{u.nombre || u.email}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn-secondary" onClick={() => setShowTaskModal(false)}>Cancelar</button>
-              <button className="btn-primary" onClick={handleAddTask}>Añadir Tarea</button>
+              <button className="btn-primary" onClick={handleSaveTask}>{editingTaskId ? 'Guardar Cambios' : 'Añadir Tarea'}</button>
             </div>
           </div>
         </div>

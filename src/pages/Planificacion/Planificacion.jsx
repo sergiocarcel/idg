@@ -459,7 +459,7 @@ export default function Planificacion({ data, setData }) {
         <div className="modal-overlay" style={{ background: 'rgba(0,0,0,0.3)' }} onClick={() => setObraModal(null)}>
           <div onClick={e => e.stopPropagation()} style={{
             position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-            background: '#fff', borderRadius: '12px', padding: '24px', width: '360px',
+            background: '#fff', borderRadius: '12px', padding: '24px', width: '420px',
             boxShadow: '0 8px 30px rgba(0,0,0,0.2)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -491,6 +491,66 @@ export default function Planificacion({ data, setData }) {
                 </div>
               )}
             </div>
+
+            {/* Resumen de Mano de Obra */}
+            {(() => {
+              const asignacionesObra = planificacion.filter(p => p.obraId === obraModal.id);
+              if (asignacionesObra.length === 0) return null;
+
+              // Agrupar horas por trabajador
+              const horasPorTrabajador = {};
+              asignacionesObra.forEach(a => {
+                if (!horasPorTrabajador[a.trabajadorId]) {
+                  horasPorTrabajador[a.trabajadorId] = 0;
+                }
+                horasPorTrabajador[a.trabajadorId] += (Number(a.horas) || 0);
+              });
+
+              let totalCosteGeneral = 0;
+              const lineasResumen = Object.entries(horasPorTrabajador).map(([tId, horasTotales]) => {
+                const trab = trabajadores.find(t => t.id === tId);
+                const nombre = trab ? `${trab.nombre} ${trab.apellidos || ''}`.trim() : 'Desconocido';
+                const costeBase = trab?.costeBase ? Number(trab.costeBase) : 0;
+                const iva = trab?.iva ? Number(trab.iva) : 0;
+                const costeHora = costeBase * (1 + iva / 100);
+                const costeTotal = costeHora * horasTotales;
+                totalCosteGeneral += costeTotal;
+                
+                return { nombre, horasTotales, costeHora, costeTotal };
+              });
+
+              return (
+                <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 700, margin: '0 0 12px 0', color: 'var(--text-main)' }}>Resumen de Mano de Obra</h4>
+                  <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
+                        <th style={{ paddingBottom: '6px' }}>Trabajador</th>
+                        <th style={{ paddingBottom: '6px', textAlign: 'center' }}>Horas</th>
+                        <th style={{ paddingBottom: '6px', textAlign: 'right' }}>Coste/h</th>
+                        <th style={{ paddingBottom: '6px', textAlign: 'right' }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lineasResumen.map((l, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px dashed var(--border)' }}>
+                          <td style={{ padding: '6px 0', fontWeight: 500, color: 'var(--text-main)' }}>{l.nombre}</td>
+                          <td style={{ padding: '6px 0', textAlign: 'center' }}>{l.horasTotales}h</td>
+                          <td style={{ padding: '6px 0', textAlign: 'right', color: 'var(--text-muted)' }}>{l.costeHora.toFixed(2)}€</td>
+                          <td style={{ padding: '6px 0', textAlign: 'right', fontWeight: 600 }}>{l.costeTotal.toFixed(2)}€</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={3} style={{ paddingTop: '10px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>Coste General:</td>
+                        <td style={{ paddingTop: '10px', textAlign: 'right', fontWeight: 800, color: 'var(--text-main)', fontSize: '12px' }}>{totalCosteGeneral.toFixed(2)}€</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
