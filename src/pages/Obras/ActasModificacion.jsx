@@ -103,7 +103,7 @@ export default function ActasModificacion({ obra, onClose }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                     <div>
                       <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{a.id} · {new Date(a.fecha).toLocaleDateString()}</div>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', marginTop: '4px' }}>{a.descripcion}</div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', marginTop: '4px', whiteSpace: 'pre-wrap' }}>{a.descripcion}</div>
                     </div>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                       {a.firmada ? (
@@ -193,7 +193,7 @@ export default function ActasModificacion({ obra, onClose }) {
               <div className="modal-header"><h2>Firmar Acta {printActa.id}</h2><button className="icon-btn" onClick={() => setPrintActa(null)} style={{ background: 'none' }}><X size={18} /></button></div>
               <div className="modal-body" style={{ padding: '24px' }}>
                 <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', marginBottom: '20px', fontSize: '13px', lineHeight: '1.6' }}>
-                  <strong>Descripción:</strong> {printActa.descripcion}<br/>
+                  <strong>Descripción:</strong> <span style={{ whiteSpace: 'pre-wrap', display: 'inline-block', verticalAlign: 'top', width: '100%' }}>{printActa.descripcion}</span><br/>
                   <strong>Impacto plazo:</strong> {printActa.impactoDias} días | <strong>Impacto coste:</strong> {formatCur(printActa.impactoCoste)}
                 </div>
                 <div style={{ marginBottom: '12px', fontSize: '13px', fontWeight: 600 }}>Firma del cliente:</div>

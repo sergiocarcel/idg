@@ -4,13 +4,22 @@ import { deleteDoc } from '../../services/db';
 
 function ContentEditableCell({ initialValue, onChange, onFocus, onBlur, placeholder }) {
   const ref = useRef(null);
+  const focusedRef = useRef(false);
   const [focused, setFocused] = useState(false);
 
+  // Set initial content on mount
   useEffect(() => {
-    if (ref.current && !focused && ref.current.innerHTML !== (initialValue || '')) {
+    if (ref.current && ref.current.innerHTML === '') {
       ref.current.innerHTML = initialValue || '';
     }
-  }, [initialValue, focused]);
+  }, []);
+
+  // Only sync external changes when NOT focused
+  useEffect(() => {
+    if (ref.current && !focusedRef.current && ref.current.innerHTML !== (initialValue || '')) {
+      ref.current.innerHTML = initialValue || '';
+    }
+  }, [initialValue]);
 
   return (
     <div style={{ position: 'relative' }}>
@@ -22,14 +31,14 @@ function ContentEditableCell({ initialValue, onChange, onFocus, onBlur, placehol
         ref={ref}
         contentEditable
         suppressContentEditableWarning
-        onFocus={() => { setFocused(true); if(onFocus) onFocus(); }}
+        onFocus={() => { focusedRef.current = true; setFocused(true); if(onFocus) onFocus(); }}
         onBlur={(e) => { 
+          focusedRef.current = false;
           setFocused(false); 
           onChange(e.currentTarget.innerHTML); 
           if(onBlur) onBlur(); 
         }}
         onInput={(e) => onChange(e.currentTarget.innerHTML)}
-        dangerouslySetInnerHTML={{ __html: initialValue || '' }}
         style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--border)', borderRadius: '6px', minHeight: '34px', outline: 'none', fontFamily: 'inherit', fontSize: '13px', lineHeight: '1.4', background: '#fff', cursor: 'text' }}
         data-placeholder={placeholder}
       />

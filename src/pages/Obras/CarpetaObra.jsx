@@ -275,7 +275,7 @@ export default function CarpetaObra({ obra, data, setData, onClose }) {
                               <FileText size={14} style={{ color: '#8b5cf6' }} />
                               <span style={{ fontSize: '11px', fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase' }}>Acta Modificación</span>
                             </div>
-                            <div style={{ fontSize: '12px', color: 'var(--text-main)', fontWeight: 500 }}>{item.descripcion || 'Sin descripción'}</div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-main)', fontWeight: 500, whiteSpace: 'pre-wrap' }}>{item.descripcion || 'Sin descripción'}</div>
                             {(item.impactoDias || item.impactoCoste) && (
                               <div style={{ fontSize: '10px', color: '#64748b' }}>
                                 {item.impactoDias && <span>+{item.impactoDias} días</span>}
