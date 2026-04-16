@@ -164,7 +164,7 @@ export default function Presupuestos({ data, setData, forceMode }) {
       ``,
       `Quedamos a tu disposición.`,
       `Saludos,`,
-      `IDG`
+      `${import.meta.env.VITE_APP_COMPANY || 'CRM'}`
     ].join('\n');
   };
 
@@ -220,7 +220,7 @@ export default function Presupuestos({ data, setData, forceMode }) {
         if (previewChannel === 'email') {
           const result = await sendEmail(
             import.meta.env.VITE_EMAILJS_TEMPLATE_PORTAL,
-            { to_email: cliente.email, to_name: cliente.nombre, subject: `Presupuesto ${ppto.id} - IDG`, message, from_name: 'IDG' }
+            { to_email: cliente.email, to_name: cliente.nombre, subject: `Presupuesto ${ppto.id} - ${import.meta.env.VITE_APP_COMPANY || 'CRM'}`, message, from_name: import.meta.env.VITE_APP_COMPANY || 'CRM' }
           );
           setPreviewPpto(null);
           setSendingEmailId(null);
@@ -815,7 +815,7 @@ export default function Presupuestos({ data, setData, forceMode }) {
               {firmaSuccessModal.signingLink && firmaSuccessModal.cliente.telefono && (
                 <button className="btn-primary" style={{ background: '#25D366' }}
                   onClick={() => {
-                    const msg = `Hola ${firmaSuccessModal.cliente.nombre}, te enviamos el enlace para firmar el presupuesto ${firmaSuccessModal.ppto.id}:\n\n${firmaSuccessModal.signingLink}\n\nQuedamos a tu disposición.\nSaludos, IDG`;
+                    const msg = `Hola ${firmaSuccessModal.cliente.nombre}, te enviamos el enlace para firmar el presupuesto ${firmaSuccessModal.ppto.id}:\n\n${firmaSuccessModal.signingLink}\n\nQuedamos a tu disposición.\nSaludos, ${import.meta.env.VITE_APP_COMPANY || 'CRM'}`;
                     openWhatsApp(firmaSuccessModal.cliente.telefono, msg);
                     setFirmaSuccessModal(null);
                   }}>

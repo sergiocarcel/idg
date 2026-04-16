@@ -198,7 +198,7 @@ export default function RRHH({ data, setData }) {
     <div className="page-container">
       <header className="page-header">
         <div>
-          <h1 className="page-title">IDG Gestión y RRHH</h1>
+          <h1 className="page-title">Gestión y RRHH</h1>
           <p className="page-subtitle">Documentación legal cruzada, caducidades y recursos productivos.</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -536,7 +536,7 @@ export default function RRHH({ data, setData }) {
                           to_name: `${trabajador.nombre} ${trabajador.apellidos || ''}`.trim(),
                           subject: `Documento de recursos humanos: ${sendDocModal.nombre}`,
                           message,
-                          from_name: 'IDG',
+                          from_name: import.meta.env.VITE_APP_COMPANY || 'CRM',
                         });
                         if (result.success) {
                           alert('✅ Email enviado correctamente');

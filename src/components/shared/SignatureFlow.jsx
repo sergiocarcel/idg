@@ -42,7 +42,7 @@ export default function SignatureFlow({
   };
 
   const handleSendWhatsApp = () => {
-    const message = `Hola ${recipientName}, te enviamos el documento "${title}" para su revisión y firma.${documentUrl ? `\n\nDocumento: ${documentUrl}` : ''}\n\nSaludos, IDG CRM.`;
+    const message = `Hola ${recipientName}, te enviamos el documento "${title}" para su revisión y firma.${documentUrl ? `\n\nDocumento: ${documentUrl}` : ''}\n\nSaludos, ${import.meta.env.VITE_APP_NAME || 'CRM'}.`;
     openWhatsApp(recipientPhone, message);
     onSendRemote?.('whatsapp');
     setSent(true);
@@ -57,7 +57,7 @@ export default function SignatureFlow({
         to_name: recipientName,
         subject: `Documento para firma: ${title}`,
         message: `Le enviamos el documento "${title}" para su revisión y firma.${documentUrl ? `\n\nPuede acceder al documento aquí: ${documentUrl}` : ''}`,
-        from_name: 'IDG CRM'
+        from_name: import.meta.env.VITE_APP_NAME || 'CRM'
       });
 
       if (result.success) {
@@ -70,7 +70,7 @@ export default function SignatureFlow({
       openEmailComposer(
         recipientEmail,
         `Documento para firma: ${title}`,
-        `Hola ${recipientName},\n\nLe enviamos el documento "${title}" para su revisión y firma.${documentUrl ? `\n\nDocumento: ${documentUrl}` : ''}\n\nSaludos,\nIDG CRM`
+        `Hola ${recipientName},\n\nLe enviamos el documento "${title}" para su revisión y firma.${documentUrl ? `\n\nDocumento: ${documentUrl}` : ''}\n\nSaludos,\n${import.meta.env.VITE_APP_NAME || 'CRM'}`
       );
       onSendRemote?.('email');
       setSent(true);

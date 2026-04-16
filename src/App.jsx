@@ -117,7 +117,7 @@ function App() {
           <Route path="/materiales" element={<Almacen data={appData} setData={setAppData} />} />
           <Route path="/proveedores" element={<Proveedores data={appData} setData={setAppData} />} />
           <Route path="/trabajadores" element={<Trabajadores data={appData} setData={setAppData} />} />
-          <Route path="/idg" element={<RRHH data={appData} setData={setAppData} />} />
+          <Route path="/gestion" element={<RRHH data={appData} setData={setAppData} />} />
           <Route path="/config" element={<Configuracion data={appData} setData={setAppData} />} />
           <Route path="/calendario" element={<Calendario data={appData} setData={setAppData} />} />
           <Route path="/planificacion" element={<Planificacion data={appData} setData={setAppData} />} />

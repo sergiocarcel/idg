@@ -128,7 +128,7 @@ export default function Clientes({ data, setData }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ color: lbl === 'Email' ? 'var(--accent)' : 'var(--text-main)', fontWeight: 500 }}>{val}</span>
                     {lbl === 'Teléfono' && val && (
-                      <a href={`https://wa.me/34${val.replace(/\D/g,'')}?text=${encodeURIComponent('Hola '+selectedClient.nombre+', contactamos desde IDG CRM:')}`} target="_blank" rel="noreferrer" style={{ display: 'flex', background: '#25D366', color: '#fff', padding: '4px 8px', borderRadius: '12px', fontSize: '11px', textDecoration: 'none', fontWeight: 600, alignItems: 'center' }}>WhatsApp</a>
+                      <a href={`https://wa.me/34${val.replace(/\D/g,'')}?text=${encodeURIComponent('Hola '+selectedClient.nombre+', contactamos desde '+(import.meta.env.VITE_APP_NAME || 'CRM')+':')}`} target="_blank" rel="noreferrer" style={{ display: 'flex', background: '#25D366', color: '#fff', padding: '4px 8px', borderRadius: '12px', fontSize: '11px', textDecoration: 'none', fontWeight: 600, alignItems: 'center' }}>WhatsApp</a>
                     )}
                   </div>
                 </div>

@@ -293,13 +293,13 @@ export default function Pedidos({ data, setData, userName, userEmail }) {
                     style={{ justifyContent: 'flex-start', gap: '10px', padding: '12px 16px' }}
                     onClick={async () => {
                       const { trabajador, pedido, obraNombre } = notifyModal;
-                      const message = `Hola ${trabajador.nombre},\n\nSe ha creado un nuevo pedido para la obra "${obraNombre}":\n\n${pedido.descripcion}\n\nPrioridad: ${pedido.prioridad === 'urgente' ? 'URGENTE' : 'No urgente'}\n\nPara más información entra en el CRM.\n\n— IDG`;
+                      const message = `Hola ${trabajador.nombre},\n\nSe ha creado un nuevo pedido para la obra "${obraNombre}":\n\n${pedido.descripcion}\n\nPrioridad: ${pedido.prioridad === 'urgente' ? 'URGENTE' : 'No urgente'}\n\nPara más información entra en el CRM.\n\n— ${import.meta.env.VITE_APP_COMPANY || 'CRM'}`;
                       const result = await sendEmail(import.meta.env.VITE_EMAILJS_TEMPLATE_PORTAL, {
                         to_email: trabajador.email,
                         to_name: `${trabajador.nombre} ${trabajador.apellidos || ''}`.trim(),
                         subject: `Nuevo pedido asignado — ${obraNombre}`,
                         message,
-                        from_name: 'IDG',
+                        from_name: import.meta.env.VITE_APP_COMPANY || 'CRM',
                       });
                       if (result.success) alert('✅ Email enviado correctamente');
                       else alert('❌ Error al enviar email: ' + (result.error || 'Error desconocido'));

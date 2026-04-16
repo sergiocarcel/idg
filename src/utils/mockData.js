@@ -22,7 +22,7 @@ export const initialData = {
     }
   ],
   pedidos: [
-    { id: 'PED-1', descripcion: '10 sacos de cemento rápido', obraId: 'OBR-A', prioridad: 'urgente', estado: 'pedido', solicitante: 'admin@idg.es', solicitanteNombre: 'Admin', notas: 'Para terminar la rampa.', createdAt: new Date().toISOString() }
+    { id: 'PED-1', descripcion: '10 sacos de cemento rápido', obraId: 'OBR-A', prioridad: 'urgente', estado: 'pedido', solicitante: 'admin@empresa.es', solicitanteNombre: 'Admin', notas: 'Para terminar la rampa.', createdAt: new Date().toISOString() }
   ],
   materiales: [
     { id: 'MAT-1', nombre: 'Hormigonera eléctrica 140L', cantidad: '1 ud', stock: 1, minimo: 1, responsable: 'Carlos O.', obraId: 'OBR-A', proveedorId: 'PROV-2', createdAt: '2026-03-20' },
@@ -46,20 +46,20 @@ export const initialData = {
   facturas: [],
   config: {
     empresa: {
-      nombre: 'Innovate Design Group',
+      nombre: 'Mi Empresa S.L.',
       nif: 'B-12345678',
       direccion: 'Calle Principal 123, Madrid',
       telefono: '+34 600 000 000',
-      email: 'contacto@idg.es',
+      email: 'contacto@empresa.es',
       iban: 'ES00 0000 0000 0000 0000 0000',
       pieFactura: 'Inscrita en el Registro Mercantil...',
       logoId: ''
     },
     usuarios: [
-      { id: 'U1', nombre: 'Admin Total', email: 'admin@idg.es', rol: 'admin', activo: true },
-      { id: 'U2', nombre: 'Jefe Obra', email: 'jefe@idg.es', rol: 'jefe', activo: true },
-      { id: 'U3', nombre: 'Logística', email: 'logistica@idg.es', rol: 'logistica', activo: true },
-      { id: 'U4', nombre: 'Trabajador Base', email: 'trabajador@idg.es', rol: 'trabajador', activo: true }
+      { id: 'U1', nombre: 'Admin Total', email: 'admin@empresa.es', rol: 'admin', activo: true },
+      { id: 'U2', nombre: 'Jefe Obra', email: 'jefe@empresa.es', rol: 'jefe', activo: true },
+      { id: 'U3', nombre: 'Logística', email: 'logistica@empresa.es', rol: 'logistica', activo: true },
+      { id: 'U4', nombre: 'Trabajador Base', email: 'trabajador@empresa.es', rol: 'trabajador', activo: true }
     ]
   }
 };

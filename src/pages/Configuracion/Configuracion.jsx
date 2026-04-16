@@ -9,11 +9,11 @@ export default function Configuracion({ data, setData }) {
   const condicionesEmpresaRef = useRef(null);
 
   const [empresa, setEmpresa] = useState(data?.config?.empresa || {
-    nombre: 'Innovate Design Group',
+    nombre: '',
     nif: 'B-12345678',
     direccion: 'Calle Principal 123, Madrid',
     telefono: '+34 600 000 000',
-    email: 'contacto@idg.es',
+    email: '',
     iban: 'ES00 0000 0000 0000 0000 0000',
     pieFactura: 'Inscrita en el Registro Mercantil...',
     condicionesPresupuesto: 'Validez operativa del presupuesto: 30 días. Los precios no incluyen licencias ni permisos de obra a menos que se indique explícitamente en una partida.',
@@ -21,7 +21,7 @@ export default function Configuracion({ data, setData }) {
   });
 
   const [usuarios, setUsuarios] = useState(data?.config?.usuarios || [
-    { id: 'U1', nombre: 'Admin Default', email: 'admin@idg.es', rol: 'admin', activo: true }
+    { id: 'U1', nombre: 'Admin Default', email: '', rol: 'admin', activo: true }
   ]);
 
   const [userForm, setUserForm] = useState({ id: '', nombre: '', email: '', password: '', rol: 'trabajador', activo: true });

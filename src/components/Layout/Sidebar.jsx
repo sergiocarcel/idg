@@ -18,13 +18,13 @@ const menuItems = [
   { k: "proveedores", l: "Proveedores", i: Truck },
   { k: "calendario", l: "Calendario", i: Calendar },
   { k: "trabajadores", l: "Trabajadores", i: User },
-  { k: "idg", l: "IDG Gestión", i: FolderKanban },
+  { k: "gestion", l: "Gestión y RRHH", i: FolderKanban },
   { k: "config", l: "Configuración", i: Settings }
 ];
 
 export default function Sidebar({ userRole = 'trabajador', userName = 'Usuario', onClose }) {
   const roleAccess = {
-    admin: ['dashboard', 'clientes', 'obras', 'presupuestos', 'facturas', 'planificacion', 'pedidos', 'materiales', 'proveedores', 'calendario', 'trabajadores', 'idg', 'config'],
+    admin: ['dashboard', 'clientes', 'obras', 'presupuestos', 'facturas', 'planificacion', 'pedidos', 'materiales', 'proveedores', 'calendario', 'trabajadores', 'gestion', 'config'],
     jefe: ['dashboard', 'clientes', 'obras', 'presupuestos', 'planificacion', 'pedidos', 'materiales', 'calendario', 'trabajadores'],
     logistica: ['dashboard', 'pedidos', 'materiales', 'proveedores'],
     trabajador: ['dashboard', 'pedidos', 'trabajadores']
@@ -35,13 +35,13 @@ export default function Sidebar({ userRole = 'trabajador', userName = 'Usuario',
   const groups = [
     { title: 'GESTIÓN', keys: ['dashboard', 'clientes', 'obras', 'presupuestos', 'facturas'] },
     { title: 'OPERACIONES', keys: ['planificacion', 'pedidos', 'materiales', 'proveedores', 'calendario'] },
-    { title: 'SISTEMA', keys: ['trabajadores', 'idg', 'config'] }
+    { title: 'SISTEMA', keys: ['trabajadores', 'gestion', 'config'] }
   ];
 
   return (
     <aside className="app-sidebar">
       <div className="sidebar-logo" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div className="logo-placeholder">IDG CRM</div>
+        <div className="logo-placeholder">{import.meta.env.VITE_APP_NAME || 'CRM'}</div>
         <button className="mobile-close-btn" onClick={onClose}><X size={20} /></button>
       </div>
       

@@ -200,7 +200,7 @@ export default function PortalColaborador() {
       </div>
 
       <div style={{ textAlign: 'center', padding: '24px', fontSize: '11px', color: '#94a3b8' }}>
-        Portal de colaborador · IDG {new Date().getFullYear()}
+        Portal de colaborador · {import.meta.env.VITE_APP_COMPANY || 'CRM'} {new Date().getFullYear()}
       </div>
     </div>
   );

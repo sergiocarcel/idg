@@ -77,7 +77,7 @@ export default function Login() {
                 onChange={e => setEmail(e.target.value)} 
                 required 
                 style={{ paddingLeft: '44px', width: '100%' }}
-                placeholder="usuario@idg.es"
+                placeholder="usuario@empresa.es"
               />
             </div>
           </div>

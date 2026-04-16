@@ -14,17 +14,7 @@ export default function PdfHeader({ empresa, rightContent, rightTopContent, righ
   const topContent = rightTopContent || rightContent;
 
   const renderNombreEmpresa = () => {
-    const nombre = emp.nombre || 'Empresa';
-    if (nombre.toUpperCase().includes('INNOVATE DESIGN GROUP')) {
-      const resto = nombre.replace(/INNOVATE DESIGN GROUP/i, '').trim();
-      return (
-        <>
-          INNOVATE DESIGN GROUP
-          {resto && <><br />{resto}</>}
-        </>
-      );
-    }
-    return nombre;
+    return emp.nombre || 'Empresa';
   };
 
   return (

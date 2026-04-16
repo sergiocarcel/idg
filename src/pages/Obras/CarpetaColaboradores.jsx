@@ -26,7 +26,7 @@ export default function CarpetaColaboradores({ obra, data, onClose }) {
     setSendingEmail(colab.id);
     setEmailSent(null);
     const portalUrl = `${window.location.origin}/portal`;
-    const subject = `Acceso a documentos de obra: ${obra.nombre} - IDG`;
+    const subject = `Acceso a documentos de obra: ${obra.nombre} - ${import.meta.env.VITE_APP_COMPANY || 'CRM'}`;
     const message = [
       `Hola ${colab.nombre},`,
       ``,
@@ -42,7 +42,7 @@ export default function CarpetaColaboradores({ obra, data, onClose }) {
       obra.direccion ? `Dirección de la obra: ${obra.direccion}` : '',
       ``,
       `Saludos,`,
-      `IDG`
+      `${import.meta.env.VITE_APP_COMPANY || 'CRM'}`
     ].filter(Boolean).join('\n');
 
     const result = await sendEmail(PORTAL_TEMPLATE_ID, {
@@ -50,7 +50,7 @@ export default function CarpetaColaboradores({ obra, data, onClose }) {
       to_name: colab.nombre,
       subject,
       message,
-      from_name: 'IDG'
+      from_name: import.meta.env.VITE_APP_COMPANY || 'CRM'
     });
     setSendingEmail(null);
     if (result.success) {
