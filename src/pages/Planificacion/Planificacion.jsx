@@ -32,18 +32,18 @@ export default function Planificacion({ data, setData }) {
   const clientes = data?.clientes || [];
   const planificacion = data?.planificacion || [];
 
-  // Semana actual (Lun-Vie)
+  // Semana actual (Lun-Dom)
   const today = new Date();
   const monday = new Date(today);
   monday.setDate(today.getDate() - ((today.getDay() + 6) % 7) + weekOffset * 7);
-  const weekDays = Array.from({ length: 5 }, (_, i) => {
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
     return d;
   });
 
   const dayKey = (d) => d.toISOString().split('T')[0];
-  const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
+  const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const isToday = (d) => dayKey(d) === dayKey(today);
 
   const getAssignments = (obraId, day) =>
@@ -125,7 +125,7 @@ export default function Planificacion({ data, setData }) {
 
   const weekLabel = () => {
     const start = weekDays[0];
-    const end = weekDays[4];
+    const end = weekDays[6];
     return `${start.getDate()}/${start.getMonth() + 1} — ${end.getDate()}/${end.getMonth() + 1}/${end.getFullYear()}`;
   };
 
@@ -149,11 +149,7 @@ export default function Planificacion({ data, setData }) {
     if (!window.confirm(`¿Quieres duplicar las asignaciones de este día al siguiente día laborable?`)) return;
 
     const nextDate = new Date(sourceDay);
-    if (nextDate.getDay() === 5) {
-      nextDate.setDate(nextDate.getDate() + 3); // De Viernes a Lunes
-    } else {
-      nextDate.setDate(nextDate.getDate() + 1);
-    }
+    nextDate.setDate(nextDate.getDate() + 1);
     
     const sourceDayStr = dayKey(sourceDay);
     const nextDayStr = dayKey(nextDate);
@@ -291,7 +287,7 @@ export default function Planificacion({ data, setData }) {
               <tr>
                 <th style={{ width: '200px', position: 'sticky', left: 0, top: 0, background: '#f8fafc', zIndex: 25, borderBottom: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>Obra / Proyecto</th>
                 {weekDays.map((d, i) => (
-                  <th key={i} style={{ textAlign: 'center', background: isToday(d) ? '#eff6ff' : '#f8fafc', minWidth: '140px', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 20 }}>
+                  <th key={i} style={{ textAlign: 'center', background: isToday(d) ? '#eff6ff' : (i >= 5 ? '#f1f5f9' : '#f8fafc'), minWidth: '140px', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 20 }}>
                     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px' }}>
                       <div style={{ fontWeight: 700 }}>{dayNames[i]}</div>
                       <button className="icon-btn" style={{ padding: '2px', color: '#64748b' }} onClick={() => handleDuplicateDay(d)} title="Duplicar al día siguiente">
@@ -308,7 +304,7 @@ export default function Planificacion({ data, setData }) {
             </thead>
             <tbody>
               {obras.length === 0 && (
-                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No hay obras. Crea una con el botón "Añadir Obra".</td></tr>
+                <tr><td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No hay obras. Crea una con el botón "Añadir Obra".</td></tr>
               )}
               {obras.map(obra => (
                 <tr key={obra.id} style={{ opacity: obra.estado === 'finalizada' ? 0.5 : 1 }}>
@@ -336,7 +332,7 @@ export default function Planificacion({ data, setData }) {
                         onDrop={(e) => handleDrop(e, obra.id, day)}
                         style={{
                           verticalAlign: 'top', padding: '8px',
-                          background: isToday(day) ? '#f0f7ff' : undefined,
+                          background: isToday(day) ? '#f0f7ff' : (di >= 5 ? '#f8fafc' : undefined),
                           minHeight: '60px', position: 'relative',
                           borderRight: '1px dashed #e2e8f0', borderBottom: '1px dashed #e2e8f0'
                         }}
