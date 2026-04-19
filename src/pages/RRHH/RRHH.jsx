@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, FolderOpen, AlertTriangle, FileText, DownloadCloud, Trash2, Send, X, PenTool, MessageCircle, Mail, Folder, CornerLeftUp, MoveRight, FolderPlus, RefreshCw, Paperclip } from 'lucide-react';
-import { saveDoc, deleteDoc } from '../../services/db';
+import ExportButton from '../../components/shared/ExportButton.jsx';
+import { fmtDate, fmtCurrency } from '../../utils/csvExport';
+import { saveDoc, deleteDoc, updateDoc } from '../../services/db';
+import { notifyRRHHVencimiento, bucketRank } from '../../services/notifications';
 import { openWhatsApp, sendEmail } from '../../utils/sendUtils';
 import SignatureFlow from '../../components/shared/SignatureFlow.jsx';
 import FirmaDevModalRRHH from '../../components/shared/FirmaDevModalRRHH.jsx';
@@ -23,6 +26,34 @@ export default function RRHH({ data, setData }) {
 
   const documentos = data?.documentosRRHH || [];
   const trabajadores = data?.trabajadores || [];
+  const processingRef = useRef(new Set());
+
+  useEffect(() => {
+    const usuarios = data?.config?.usuarios || [];
+    if (usuarios.length === 0) return;
+    const hoy = new Date();
+    const pending = [];
+    for (const doc of documentos) {
+      if (!doc.fechaVencimiento || doc.isFolder) continue;
+      if (processingRef.current.has(doc.id)) continue;
+      const fv = new Date(doc.fechaVencimiento);
+      const dias = Math.ceil((fv - hoy) / (1000 * 60 * 60 * 24));
+      const bucket = dias <= 0 ? 'expirado' : dias <= 7 ? '7d' : dias <= 30 ? '30d' : null;
+      if (!bucket) continue;
+      if (bucketRank(bucket) <= bucketRank(doc.notificadoBucket)) continue;
+      pending.push({ doc, bucket });
+    }
+    if (pending.length === 0) return;
+    pending.forEach(({ doc }) => processingRef.current.add(doc.id));
+    Promise.all(
+      pending.map(({ doc, bucket }) => {
+        const trabajador = trabajadores.find(t => t.id === doc.trabajadorId);
+        return notifyRRHHVencimiento({ doc, trabajador, bucket, usuarios })
+          .then(() => updateDoc('documentosRRHH', doc.id, { notificadoBucket: bucket }))
+          .finally(() => processingRef.current.delete(doc.id));
+      })
+    ).catch(() => {});
+  }, [documentos, trabajadores]);
 
   const handleInputChange = (field) => (e) => setFormData({ ...formData, [field]: e.target.value });
 
@@ -202,6 +233,19 @@ export default function RRHH({ data, setData }) {
           <p className="page-subtitle">Documentación legal cruzada, caducidades y recursos productivos.</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
+          <ExportButton
+            data={docsInCurrentView}
+            filename="documentos_rrhh"
+            columns={[
+              { key: 'nombre', label: 'Nombre' },
+              { key: (d) => categories.find(c => c.id === d.categoria)?.label || d.categoria, label: 'Categoría' },
+              { key: 'subcategoria', label: 'Subcarpeta' },
+              { key: (d) => trabajadores.find(t => t.id === d.trabajadorId)?.nombre || '', label: 'Trabajador' },
+              { key: (d) => fmtDate(d.fechaVencimiento), label: 'Vencimiento' },
+              { key: (d) => fmtDate(d.fechaSubida), label: 'Subida' },
+              { key: (d) => fmtCurrency(d.coste), label: 'Coste' },
+            ]}
+          />
           {activeCategory !== 'todas' && !activeSubfolder && (
             <button className="btn-secondary" onClick={handleCreateSubfolder}>
               <FolderPlus size={14} /> Nueva Subcarpeta

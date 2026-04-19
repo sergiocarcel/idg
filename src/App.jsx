@@ -14,11 +14,13 @@ import Configuracion from './pages/Configuracion/Configuracion.jsx';
 import Proveedores from './pages/Proveedores/Proveedores.jsx';
 import Calendario from './pages/Calendario/Calendario.jsx';
 import Planificacion from './pages/Planificacion/Planificacion.jsx';
+import Informes from './pages/Informes/Informes.jsx';
 import Login from './pages/Auth/Login.jsx';
 import PortalColaborador from './pages/Portal/PortalColaborador.jsx';
 
 import { listenToCollection, seedDatabaseIfNeeded } from './services/db';
 import { auth } from './config/firebase';
+import { isFcmSupported, requestPermissionAndToken, registerCurrentUserToken } from './services/fcmClient';
 
 function App() {
   const [appData, setAppData] = useState({
@@ -26,6 +28,7 @@ function App() {
     proveedores: [], trabajadores: [], registroHoras: [], documentosRRHH: [],
     facturas: [], catalogoPartidas: [], tareasDashboard: [], notificaciones: [],
     eventos: [], planificacion: [], colaboradores: [], plantillasPresupuesto: [],
+    logs: [],
     config: { empresa: null, usuarios: [] }
   });
 
@@ -40,6 +43,12 @@ function App() {
       if (currentUser) {
         setLoading(true);
         await initDB();
+        // Register FCM push token for this user (Blaze mode only)
+        if (isFcmSupported()) {
+          requestPermissionAndToken()
+            .then(token => { if (token) registerCurrentUserToken(currentUser.email, token); })
+            .catch(() => {});
+        }
       } else {
         setLoading(false);
       }
@@ -52,7 +61,7 @@ function App() {
       await seedDatabaseIfNeeded();
       
       const unsubs = [];
-      const cols = ['clientes', 'obras', 'presupuestos', 'pedidos', 'materiales', 'proveedores', 'trabajadores', 'registroHoras', 'documentosRRHH', 'facturas', 'catalogoPartidas', 'tareasDashboard', 'notificaciones', 'eventos', 'planificacion', 'colaboradores', 'plantillasPresupuesto'];
+      const cols = ['clientes', 'obras', 'presupuestos', 'pedidos', 'materiales', 'proveedores', 'trabajadores', 'registroHoras', 'documentosRRHH', 'facturas', 'catalogoPartidas', 'tareasDashboard', 'notificaciones', 'eventos', 'planificacion', 'colaboradores', 'plantillasPresupuesto', 'logs'];
       
       cols.forEach(col => {
         const unsub = listenToCollection(col, (data) => {
@@ -106,7 +115,7 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Layout userRole={userRole} userName={userName} notificaciones={(appData.notificaciones || []).filter(n => !n.destinatarios || n.destinatarios.length === 0 || n.destinatarios.some(e => e.toLowerCase() === (user.email || '').toLowerCase()))}>
+      <Layout userRole={userRole} userName={userName} data={appData} notificaciones={(appData.notificaciones || []).filter(n => !n.destinatarios || n.destinatarios.length === 0 || n.destinatarios.some(e => e.toLowerCase() === (user.email || '').toLowerCase()))}>
         <Routes>
           <Route path="/" element={<Dashboard data={appData} setData={setAppData} />} />
           <Route path="/clientes" element={<Clientes data={appData} setData={setAppData} />} />
@@ -121,6 +130,7 @@ function App() {
           <Route path="/config" element={<Configuracion data={appData} setData={setAppData} />} />
           <Route path="/calendario" element={<Calendario data={appData} setData={setAppData} />} />
           <Route path="/planificacion" element={<Planificacion data={appData} setData={setAppData} />} />
+          <Route path="/informes" element={<Informes data={appData} setData={setAppData} />} />
         </Routes>
       </Layout>
     </BrowserRouter>

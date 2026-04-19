@@ -6,6 +6,8 @@ import {
   DollarSign, Receipt
 } from 'lucide-react';
 import { saveDoc, deleteDoc } from '../../services/db';
+import { auth } from '../../config/firebase';
+import { notifyTareaAsignada } from '../../services/notifications';
 
 export default function Dashboard({ data, setData }) {
   const navigate = useNavigate();
@@ -126,7 +128,12 @@ export default function Dashboard({ data, setData }) {
       await saveDoc('tareasDashboard', editingTaskId, { ...newTask });
     } else {
       const id = 'TASK-' + Date.now();
-      await saveDoc('tareasDashboard', id, { ...newTask, id, completada: false, fecha: new Date().toISOString() });
+      const autorEmail = auth.currentUser?.email;
+      const tarea = { ...newTask, id, completada: false, fecha: new Date().toISOString() };
+      await Promise.all([
+        saveDoc('tareasDashboard', id, tarea),
+        notifyTareaAsignada({ tarea, autorEmail, usuarios: data?.config?.usuarios || [] }),
+      ]);
     }
     setShowTaskModal(false);
     setEditingTaskId(null);

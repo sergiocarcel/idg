@@ -1,6 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Edit2, Trash2, X, FolderOpen, Calendar, MapPin, User, Users } from 'lucide-react';
 import { saveDoc, deleteDoc, updateDoc } from '../../services/db';
+import ExportButton from '../../components/shared/ExportButton.jsx';
+import ActivityTimeline from '../../components/shared/ActivityTimeline.jsx';
+import { fmtDate } from '../../utils/csvExport';
 import { generatePdfFromElement } from '../../utils/pdfUtils';
 import PresupuestoPrint from '../Presupuestos/PresupuestoPrint.jsx';
 import Gantt from './Gantt.jsx';
@@ -9,8 +13,11 @@ import ActasModificacion from './ActasModificacion.jsx';
 import CarpetaColaboradores from './CarpetaColaboradores.jsx';
 
 export default function Obras({ data, setData }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedObra, setSelectedObra] = useState(null);
+  const [obraDetailTab, setObraDetailTab] = useState('datos');
   const [editId, setEditId] = useState(null);
   const [ganttModalObra, setGanttModalObra] = useState(null);
   const [carpetaObra, setCarpetaObra] = useState(null);
@@ -28,6 +35,14 @@ export default function Obras({ data, setData }) {
   const obras = data?.obras || [];
   const clientes = data?.clientes || [];
   const presupuestos = data?.presupuestos || [];
+
+  useEffect(() => {
+    const openId = location.state?.openId;
+    if (!openId || !obras.length) return;
+    const entity = obras.find(o => o.id === openId);
+    if (entity) openForm(entity);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state?.openId, obras]);
 
   const handleInputChange = (field) => (e) => {
     setFormData({ ...formData, [field]: e.target.value });
@@ -148,9 +163,26 @@ export default function Obras({ data, setData }) {
           <h1 className="page-title">Obras y Proyectos</h1>
           <p className="page-subtitle">{obras.length} obras · {obras.filter(o => o.estado === 'en_curso').length} en curso</p>
         </div>
-        <button className="btn-primary" onClick={() => openForm()}>
-          <Plus size={16} /> Nueva obra
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <ExportButton
+            data={obras}
+            filename="obras"
+            columns={[
+              { key: 'nombre', label: 'Nombre' },
+              { key: (o) => getClientName(o.clienteId), label: 'Cliente' },
+              { key: 'direccion', label: 'Dirección' },
+              { key: (o) => fmtDate(o.inicio), label: 'Inicio' },
+              { key: (o) => fmtDate(o.fin), label: 'Fin' },
+              { key: (o) => o.avance + '%', label: 'Avance' },
+              { key: 'estado', label: 'Estado' },
+              { key: 'responsable', label: 'Responsable' },
+              { key: 'notas', label: 'Notas' },
+            ]}
+          />
+          <button className="btn-primary" onClick={() => openForm()}>
+            <Plus size={16} /> Nueva obra
+          </button>
+        </div>
       </header>
 
       <div style={{ display: 'grid', gridTemplateColumns: selectedObra ? '1fr 380px' : '1fr', gap: '24px', transition: 'all 0.3s' }}>
@@ -193,7 +225,7 @@ export default function Obras({ data, setData }) {
                     return (
                       <tr
                         key={o.id}
-                        onClick={() => setSelectedObra(isSelected ? null : o)}
+                        onClick={() => { setSelectedObra(isSelected ? null : o); setObraDetailTab('datos'); }}
                         className={isSelected ? 'selected-row' : ''}
                         style={{ cursor: 'pointer', background: isSelected ? '#eff6ff' : 'transparent', boxShadow: isSelected ? 'inset 4px 0 0 #3b82f6' : 'none' }}
                       >
@@ -247,8 +279,24 @@ export default function Obras({ data, setData }) {
                 </div>
                 <button className="icon-btn" style={{ background: 'none' }} onClick={() => setSelectedObra(null)}><X size={18} /></button>
               </div>
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px' }}>
+                {['datos', 'historial'].map(tab => (
+                  <button key={tab} onClick={() => setObraDetailTab(tab)} style={{
+                    padding: '10px 14px 10px 0', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px',
+                    borderBottom: obraDetailTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
+                    color: obraDetailTab === tab ? 'var(--text-main)' : 'var(--text-muted)',
+                    fontWeight: obraDetailTab === tab ? 600 : 500, marginRight: '12px',
+                  }}>
+                    {tab === 'datos' ? 'Datos' : 'Historial'}
+                  </button>
+                ))}
+              </div>
 
               <div style={{ padding: '20px' }}>
+              {obraDetailTab === 'historial' && (
+                <ActivityTimeline entidad="obras" entidadId={selectedObra.id} logs={data?.logs || []} usuarios={data?.config?.usuarios || []} />
+              )}
+              {obraDetailTab === 'datos' && (<>
                 <div style={{ marginBottom: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Avance del proyecto</span>
@@ -303,6 +351,7 @@ export default function Obras({ data, setData }) {
                     <Users size={14} /> Colaboradores
                   </button>
                 </div>
+              </>)}
               </div>
             </div>
           </div>

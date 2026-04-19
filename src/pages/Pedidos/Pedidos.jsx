@@ -1,11 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Edit2, Trash2, X, ShoppingCart, PackageCheck, Paperclip, Loader2, MessageCircle, Mail } from 'lucide-react';
 import { saveDoc, deleteDoc, updateDoc } from '../../services/db';
 import { openWhatsApp, sendEmail } from '../../utils/sendUtils';
+import { notifyPedidoNuevo } from '../../services/notifications';
+import ExportButton from '../../components/shared/ExportButton.jsx';
+import ActivityTimeline from '../../components/shared/ActivityTimeline.jsx';
+import { fmtDate } from '../../utils/csvExport';
 
 export default function Pedidos({ data, setData, userName, userEmail }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPedido, setSelectedPedido] = useState(null);
+  const [pedidoModalTab, setPedidoModalTab] = useState('datos');
 
   const initialForm = { descripcion: '', obraId: '', prioridad: 'no_urgente', notas: '', albaranUrl: '', trabajadorId: '' };
   const [formData, setFormData] = useState(initialForm);
@@ -16,6 +24,14 @@ export default function Pedidos({ data, setData, userName, userEmail }) {
   const pedidos = data?.pedidos || [];
   const obras = data?.obras || [];
   const trabajadores = data?.trabajadores || [];
+
+  useEffect(() => {
+    const openId = location.state?.openId;
+    if (!openId || !pedidos.length) return;
+    const entity = pedidos.find(p => p.id === openId);
+    if (entity) openForm(entity);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state?.openId, pedidos]);
 
   const getObraName = (id) => obras.find(o => o.id === id)?.nombre || 'Almacén Central';
 
@@ -58,25 +74,11 @@ export default function Pedidos({ data, setData, userName, userEmail }) {
       await saveDoc('pedidos', docId, docData);
 
       if (!selectedPedido) {
-        const usuarios = data?.config?.usuarios || [];
-        const destinatarios = usuarios
-          .filter(u => u.rol === 'logistica' && u.activo !== false)
-          .map(u => u.email)
-          .filter(Boolean);
-        if (destinatarios.length > 0) {
-          const notifId = 'NOTIF-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
-          const obraName = obras.find(o => o.id === formData.obraId)?.nombre || 'Almacén Central';
-          const urgenteTxt = formData.prioridad === 'urgente' ? '⚡ URGENTE — ' : '';
-          await saveDoc('notificaciones', notifId, {
-            id: notifId,
-            tipo: formData.prioridad === 'urgente' ? 'alerta' : 'info',
-            mensaje: `${urgenteTxt}Nuevo pedido de ${base.solicitanteNombre}: "${formData.descripcion}" (${obraName})`,
-            leida: false,
-            fecha: new Date().toISOString(),
-            link: '/pedidos',
-            destinatarios
-          });
-        }
+        await notifyPedidoNuevo({
+          pedido: { ...docData, solicitanteNombre: base.solicitanteNombre },
+          obras,
+          usuarios: data?.config?.usuarios || [],
+        });
 
         // Notificación al trabajador solicitante si tiene contacto
         const trabajador = trabajadores.find(t => t.id === formData.trabajadorId);
@@ -138,6 +140,7 @@ export default function Pedidos({ data, setData, userName, userEmail }) {
       setFormData(initialForm);
       setSelectedPedido(null);
     }
+    setPedidoModalTab('datos');
     setIsModalOpen(true);
   };
 
@@ -185,9 +188,25 @@ export default function Pedidos({ data, setData, userName, userEmail }) {
           <h1 className="page-title">Pedidos de Material</h1>
           <p className="page-subtitle">Peticiones de material para obra.</p>
         </div>
-        <button className="btn-primary" onClick={() => openForm()}>
-          <Plus size={16} /> Solicitar Material
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <ExportButton
+            data={pedidos}
+            filename="pedidos"
+            columns={[
+              { key: 'id', label: 'ID' },
+              { key: 'descripcion', label: 'Descripción' },
+              { key: (p) => getObraName(p.obraId), label: 'Obra' },
+              { key: 'prioridad', label: 'Prioridad' },
+              { key: 'estado', label: 'Estado' },
+              { key: 'solicitanteNombre', label: 'Solicitante' },
+              { key: (p) => fmtDate(p.createdAt), label: 'Fecha' },
+              { key: 'notas', label: 'Notas' },
+            ]}
+          />
+          <button className="btn-primary" onClick={() => openForm()}>
+            <Plus size={16} /> Solicitar Material
+          </button>
+        </div>
       </header>
 
       {/* Tarjetas resumen */}
@@ -333,6 +352,25 @@ export default function Pedidos({ data, setData, userName, userEmail }) {
               <h2>{selectedPedido ? 'Editar solicitud' : 'Nueva solicitud de material'}</h2>
               <button className="icon-btn" onClick={() => setIsModalOpen(false)} style={{ background: 'none' }}><X size={18} /></button>
             </div>
+            {selectedPedido && (
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 24px' }}>
+                {['datos', 'historial'].map(tab => (
+                  <button key={tab} onClick={() => setPedidoModalTab(tab)} style={{
+                    padding: '10px 14px 10px 0', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px',
+                    borderBottom: pedidoModalTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
+                    color: pedidoModalTab === tab ? 'var(--text-main)' : 'var(--text-muted)',
+                    fontWeight: pedidoModalTab === tab ? 600 : 500, marginRight: '12px',
+                  }}>
+                    {tab === 'datos' ? 'Datos' : 'Historial'}
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedPedido && pedidoModalTab === 'historial' ? (
+              <div className="modal-body">
+                <ActivityTimeline entidad="pedidos" entidadId={selectedPedido.id} logs={data?.logs || []} usuarios={data?.config?.usuarios || []} />
+              </div>
+            ) : (<>
             <div className="modal-body form-grid">
 
               {/* Descripción libre */}
@@ -436,6 +474,7 @@ export default function Pedidos({ data, setData, userName, userEmail }) {
                 {isSaving ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite', marginRight: '6px' }} /> Guardando...</> : (selectedPedido ? 'Actualizar' : 'Enviar Solicitud')}
               </button>
             </div>
+            </>)}
           </div>
         </div>
       )}

@@ -1,14 +1,33 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalIcon, MapPin, Clock, RefreshCw, X, Trash2 } from 'lucide-react';
 import { auth } from '../../config/firebase';
 import { saveDoc, deleteDoc, updateDoc } from '../../services/db';
 import { sendEmail } from '../../utils/sendUtils';
+import { notifyEvento } from '../../services/notifications';
+import ExportButton from '../../components/shared/ExportButton.jsx';
+import { fmtDate } from '../../utils/csvExport';
 
 export default function Calendario({ data, setData }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [highlightedEventId, setHighlightedEventId] = useState(null);
 
-  // Eventos desde Firestore (ya vienen via App.jsx listener)
   const eventos = data?.eventos || [];
+
+  useEffect(() => {
+    const openId = location.state?.openId;
+    if (!openId || !eventos.length) return;
+    const event = eventos.find(e => e.id === openId);
+    if (event?.date) {
+      const [y, m] = event.date.split('-').map(Number);
+      setCurrentDate(new Date(y, m - 1, 1));
+      setHighlightedEventId(openId);
+      setTimeout(() => setHighlightedEventId(null), 3000);
+    }
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state?.openId, eventos]);
 
   const [gcalToken, setGcalToken] = useState(localStorage.getItem('gcal_token'));
   const [gcalExpiresAt, setGcalExpiresAt] = useState(() => {
@@ -220,20 +239,8 @@ export default function Calendario({ data, setData }) {
 
     await saveDoc('eventos', eventId, eventData);
 
-    // Crear notificación in-app para cada participante
-    if (newEvent.participantes.length > 0) {
-      for (const participante of newEvent.participantes) {
-        const notifId = 'NOTIF-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
-        await saveDoc('notificaciones', notifId, {
-          id: notifId,
-          tipo: 'info',
-          mensaje: `Nuevo evento: "${newEvent.title}" el ${new Date(newEvent.date).toLocaleDateString()} a las ${newEvent.time}. Participante: ${participante}`,
-          leida: false,
-          fecha: new Date().toISOString(),
-          link: '/calendario'
-        });
-      }
-    }
+    // Notificar a participantes resolviendo su email desde config.usuarios
+    await notifyEvento({ evento: eventData, usuarios: data?.config?.usuarios || [] });
 
     // Enviar email a participantes que tengan email (buscar en trabajadores)
     const trabajadores = data?.trabajadores || [];
@@ -307,6 +314,18 @@ export default function Calendario({ data, setData }) {
           <p className="page-subtitle">Sincronizado vía Google Calendar API.</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
+          <ExportButton
+            data={currentMonthEvents}
+            filename="eventos"
+            columns={[
+              { key: 'title', label: 'Título' },
+              { key: (e) => fmtDate(e.date), label: 'Fecha' },
+              { key: 'time', label: 'Hora' },
+              { key: 'type', label: 'Tipo' },
+              { key: 'location', label: 'Lugar' },
+              { key: (e) => (e.participantes || []).join(', '), label: 'Participantes' },
+            ]}
+          />
           <button className="btn-secondary" onClick={handleGoogleSync} disabled={isSyncing}
             style={{ background: isSyncing ? '#f1f5f9' : gcalToken ? '#f0fdf4' : '#fff', color: gcalToken ? '#16a34a' : undefined, borderColor: gcalToken ? '#86efac' : undefined }}>
             <RefreshCw size={16} style={isSyncing ? { animation: 'spin 1s linear infinite' } : undefined} />
@@ -355,8 +374,9 @@ export default function Calendario({ data, setData }) {
                   </div>
                   {dayEvents.map(e => {
                     const style = getTypeStyle(e.type);
+                    const isHighlighted = e.id === highlightedEventId;
                     return (
-                      <div key={e.id} style={{ borderLeft: `2px solid ${style.color}`, background: style.bg, color: style.color, fontSize: '10px', fontWeight: 600, padding: '4px 6px', borderRadius: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}>
+                      <div key={e.id} style={{ borderLeft: `2px solid ${style.color}`, background: isHighlighted ? style.color : style.bg, color: isHighlighted ? '#fff' : style.color, fontSize: '10px', fontWeight: 600, padding: '4px 6px', borderRadius: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', transition: 'all 0.5s' }}>
                         {e.time} - {e.title}
                       </div>
                     );

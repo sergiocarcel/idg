@@ -1,12 +1,17 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
 import { saveDoc, deleteDoc } from '../../services/db';
+import ExportButton from '../../components/shared/ExportButton.jsx';
+import ActivityTimeline from '../../components/shared/ActivityTimeline.jsx';
+import { fmtDate } from '../../utils/csvExport';
 
 export default function Clientes({ data, setData }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
+  const [clienteDetailTab, setClienteDetailTab] = useState('datos');
   const [editId, setEditId] = useState(null);
   
   const initialForm = { nombre: '', nif: '', telefono: '', email: '', direccion: '', codigoPostal: '', poblacion: '', provincia: '', pais: 'España', notas: '' };
@@ -14,6 +19,14 @@ export default function Clientes({ data, setData }) {
 
   const clientes = data?.clientes || [];
   const obras = data?.obras || [];
+
+  useEffect(() => {
+    const openId = location.state?.openId;
+    if (!openId || !clientes.length) return;
+    const entity = clientes.find(c => c.id === openId);
+    if (entity) openForm(entity);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state?.openId, clientes]);
 
   const handleInputChange = (field) => (e) => {
     setFormData({ ...formData, [field]: e.target.value });
@@ -57,9 +70,28 @@ export default function Clientes({ data, setData }) {
           <h1 className="page-title">Clientes</h1>
           <p className="page-subtitle">{clientes.length} clientes registrados</p>
         </div>
-        <button className="btn-primary" onClick={() => openForm()}>
-          <Plus size={16} /> Nuevo cliente
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <ExportButton
+            data={clientes}
+            filename="clientes"
+            columns={[
+              { key: 'nombre', label: 'Nombre' },
+              { key: 'nif', label: 'NIF' },
+              { key: 'telefono', label: 'Teléfono' },
+              { key: 'email', label: 'Email' },
+              { key: 'direccion', label: 'Dirección' },
+              { key: 'codigoPostal', label: 'CP' },
+              { key: 'poblacion', label: 'Población' },
+              { key: 'provincia', label: 'Provincia' },
+              { key: 'pais', label: 'País' },
+              { key: (c) => getClientStats(c.id).obras, label: 'Obras' },
+              { key: 'notas', label: 'Notas' },
+            ]}
+          />
+          <button className="btn-primary" onClick={() => openForm()}>
+            <Plus size={16} /> Nuevo cliente
+          </button>
+        </div>
       </header>
 
       <div style={{ display: 'grid', gridTemplateColumns: selectedClient ? '1fr 360px' : '1fr', gap: '24px', transition: 'all 0.3s' }}>
@@ -85,7 +117,7 @@ export default function Clientes({ data, setData }) {
                 return (
                   <tr 
                     key={c.id} 
-                    onClick={() => setSelectedClient(isSelected ? null : c)}
+                    onClick={() => { setSelectedClient(isSelected ? null : c); setClienteDetailTab('datos'); }}
                     className={isSelected ? 'selected-row' : ''}
                     style={{ cursor: 'pointer' }}
                   >
@@ -116,7 +148,23 @@ export default function Clientes({ data, setData }) {
               <div style={{ fontWeight: 700, fontSize: '15px' }}>{selectedClient.nombre}</div>
               <button className="icon-btn" style={{ background: 'none' }} onClick={() => setSelectedClient(null)}><X size={18} /></button>
             </div>
+            <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid var(--border)', padding: '0 20px' }}>
+              {['datos', 'historial'].map(tab => (
+                <button key={tab} onClick={() => setClienteDetailTab(tab)} style={{
+                  padding: '10px 14px 10px 0', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px',
+                  borderBottom: clienteDetailTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
+                  color: clienteDetailTab === tab ? 'var(--text-main)' : 'var(--text-muted)',
+                  fontWeight: clienteDetailTab === tab ? 600 : 500, marginRight: '12px',
+                }}>
+                  {tab === 'datos' ? 'Datos' : 'Historial'}
+                </button>
+              ))}
+            </div>
             <div style={{ padding: '20px' }}>
+            {clienteDetailTab === 'historial' && (
+              <ActivityTimeline entidad="clientes" entidadId={selectedClient.id} logs={data?.logs || []} usuarios={data?.config?.usuarios || []} />
+            )}
+            {clienteDetailTab === 'datos' && (<>
               {[
                 ['NIF', selectedClient.nif],
                 ['Teléfono', selectedClient.telefono],
@@ -199,7 +247,7 @@ export default function Clientes({ data, setData }) {
                   </div>
                 )}
               </div>
-
+            </>)}
             </div>
           </div>
         )}

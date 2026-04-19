@@ -1,12 +1,22 @@
 import React, { useState, useRef } from 'react';
-import { Settings, Users, Save, Upload, Plus, Edit2, Shield, UserX, CheckCircle, UploadCloud, Info, Loader2, Trash2 } from 'lucide-react';
+import { Settings, Users, Save, Upload, Plus, Edit2, Shield, UserX, CheckCircle, UploadCloud, Info, Loader2, Trash2, KeyRound, Zap } from 'lucide-react';
 import { saveDoc } from '../../services/db';
+import {
+  isBlaze,
+  createUserRemote,
+  deleteUserRemote,
+  resetUserPasswordRemote,
+  toggleUserActiveRemote,
+} from '../../services/userAdmin';
 
 export default function Configuracion({ data, setData }) {
   const [activeTab, setActiveTab] = useState('general'); // 'general' o 'usuarios'
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [userSaving, setUserSaving] = useState(false);
   const condicionesEmpresaRef = useRef(null);
+
+  const blazeMode = isBlaze();
 
   const [empresa, setEmpresa] = useState(data?.config?.empresa || {
     nombre: '',
@@ -24,7 +34,7 @@ export default function Configuracion({ data, setData }) {
     { id: 'U1', nombre: 'Admin Default', email: '', rol: 'admin', activo: true }
   ]);
 
-  const [userForm, setUserForm] = useState({ id: '', nombre: '', email: '', password: '', rol: 'trabajador', activo: true });
+  const [userForm, setUserForm] = useState({ id: '', uid: '', nombre: '', email: '', password: '', rol: 'trabajador', activo: true });
 
   const handleEmpresaChange = (field) => (e) => setEmpresa({ ...empresa, [field]: e.target.value });
 
@@ -83,7 +93,7 @@ export default function Configuracion({ data, setData }) {
     };
     reader.readAsDataURL(file);
   };
-  
+
   const saveEmpresa = async () => {
     try {
       await saveDoc('config', 'empresa', empresa);
@@ -94,24 +104,112 @@ export default function Configuracion({ data, setData }) {
   };
 
   const handleUserDelete = async (userId) => {
-    if (!window.confirm('¿Eliminar este usuario de la lista?\n\nRecuerda que también debes eliminarlo manualmente en Firebase Authentication Console para que no pueda seguir accediendo.')) return;
-    const newUsers = usuarios.filter(u => u.id !== userId);
-    setUsuarios(newUsers);
-    await saveDoc('config', 'usuarios', { list: newUsers });
-    setIsUserModalOpen(false);
-    alert('Usuario eliminado de la lista.\n\nNo olvides eliminarlo también en Firebase Console → Authentication.');
+    const user = usuarios.find(u => u.id === userId);
+    if (!user) return;
+
+    if (blazeMode) {
+      if (!window.confirm(`¿Eliminar al usuario ${user.nombre}?\n\nEsto eliminará también su cuenta de Firebase Authentication. La acción es irreversible.`)) return;
+      setUserSaving(true);
+      try {
+        await deleteUserRemote({ uid: user.uid, id: user.id, email: user.email });
+        const newUsers = usuarios.filter(u => u.id !== userId);
+        setUsuarios(newUsers);
+        setIsUserModalOpen(false);
+      } catch (err) {
+        alert('Error eliminando el usuario: ' + (err.message || 'Error desconocido'));
+      } finally {
+        setUserSaving(false);
+      }
+    } else {
+      if (!window.confirm('¿Eliminar este usuario de la lista?\n\nRecuerda que también debes eliminarlo manualmente en Firebase Authentication Console para que no pueda seguir accediendo.')) return;
+      const newUsers = usuarios.filter(u => u.id !== userId);
+      setUsuarios(newUsers);
+      await saveDoc('config', 'usuarios', { list: newUsers });
+      setIsUserModalOpen(false);
+      alert('Usuario eliminado de la lista.\n\nNo olvides eliminarlo también en Firebase Console → Authentication.');
+    }
   };
 
   const handleUserSave = async () => {
-    let newUsers;
-    if (userForm.id) {
-      newUsers = usuarios.map(u => u.id === userForm.id ? userForm : u);
+    if (blazeMode) {
+      setUserSaving(true);
+      try {
+        if (userForm.id) {
+          // Edit: update name/rol in Firestore; sync activo with Auth if changed
+          const original = usuarios.find(u => u.id === userForm.id);
+          const activoChanged = original && original.activo !== userForm.activo;
+
+          if (activoChanged) {
+            await toggleUserActiveRemote({
+              uid: userForm.uid,
+              id: userForm.id,
+              email: userForm.email,
+              disabled: !userForm.activo,
+            });
+          }
+
+          const clean = usuarios.map(u => {
+            if (u.id !== userForm.id) return u;
+            const { password, ...rest } = { ...userForm };
+            return rest;
+          });
+          setUsuarios(clean);
+          await saveDoc('config', 'usuarios', { list: clean });
+        } else {
+          // Create: Cloud Function creates Auth account + Firestore entry
+          if (!userForm.email || !userForm.password || !userForm.nombre) {
+            alert('Los campos nombre, email y contraseña son obligatorios.');
+            return;
+          }
+          if (userForm.password.length < 6) {
+            alert('La contraseña debe tener al menos 6 caracteres.');
+            return;
+          }
+          // Cloud Function creates the Auth account and Firestore entry; merge returned uid/id into local state.
+          const { uid, id } = await createUserRemote({
+            email: userForm.email,
+            password: userForm.password,
+            nombre: userForm.nombre,
+            rol: userForm.rol,
+          });
+          const newEntry = { id, uid, nombre: userForm.nombre, email: userForm.email, rol: userForm.rol, activo: true };
+          const newUsers = [...usuarios, newEntry];
+          setUsuarios(newUsers);
+        }
+        setIsUserModalOpen(false);
+      } catch (err) {
+        alert('Error guardando el usuario: ' + (err.message || 'Error desconocido'));
+      } finally {
+        setUserSaving(false);
+      }
     } else {
-      newUsers = [...usuarios, { ...userForm, id: 'U' + Date.now() }];
+      // Spark mode: Firestore-only, original behavior
+      let newUsers;
+      if (userForm.id) {
+        newUsers = usuarios.map(u => u.id === userForm.id ? userForm : u);
+      } else {
+        newUsers = [...usuarios, { ...userForm, id: 'U' + Date.now() }];
+      }
+      setUsuarios(newUsers);
+      await saveDoc('config', 'usuarios', { list: newUsers });
+      setIsUserModalOpen(false);
     }
-    setUsuarios(newUsers);
-    await saveDoc('config', 'usuarios', { list: newUsers });
-    setIsUserModalOpen(false);
+  };
+
+  const handleResetPassword = async (user) => {
+    if (!window.confirm(`¿Enviar enlace de restablecimiento de contraseña a ${user.email}?`)) return;
+    setUserSaving(true);
+    try {
+      const { link } = await resetUserPasswordRemote({ email: user.email });
+      prompt(
+        `Enlace de reset generado para ${user.email}.\nCópialo y compártelo con el usuario:`,
+        link
+      );
+    } catch (err) {
+      alert('Error generando el enlace: ' + (err.message || 'Error desconocido'));
+    } finally {
+      setUserSaving(false);
+    }
   };
 
   const rolesMap = {
@@ -132,13 +230,13 @@ export default function Configuracion({ data, setData }) {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '32px', borderBottom: '1px solid var(--border)', marginBottom: '24px' }}>
-        <button 
+        <button
           onClick={() => setActiveTab('general')}
           style={{ padding: '0 0 12px 0', background: 'none', border: 'none', borderBottom: activeTab === 'general' ? '2px solid var(--accent)' : '2px solid transparent', color: activeTab === 'general' ? 'var(--text-main)' : 'var(--text-muted)', fontWeight: activeTab === 'general' ? 600 : 500, cursor: 'pointer', transition: 'all 0.2s', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}
         >
           <Settings size={16} /> Datos de la Empresa
         </button>
-        <button 
+        <button
           onClick={() => setActiveTab('usuarios')}
           style={{ padding: '0 0 12px 0', background: 'none', border: 'none', borderBottom: activeTab === 'usuarios' ? '2px solid var(--accent)' : '2px solid transparent', color: activeTab === 'usuarios' ? 'var(--text-main)' : 'var(--text-muted)', fontWeight: activeTab === 'usuarios' ? 600 : 500, cursor: 'pointer', transition: 'all 0.2s', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}
         >
@@ -148,7 +246,7 @@ export default function Configuracion({ data, setData }) {
 
       {activeTab === 'general' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 400px) 1fr', gap: '24px' }}>
-          
+
           {/* Logo uploader */}
           <div className="stat-card" style={{ padding: '24px', alignSelf: 'start', textAlign: 'center' }}>
             <h3 style={{ fontSize: '14px', marginBottom: '16px', textAlign: 'left' }}>Logotipo Corporativo</h3>
@@ -164,7 +262,7 @@ export default function Configuracion({ data, setData }) {
                 </>
               )}
             </div>
-            
+
             <input
               type="file"
               id="logo-upload-input"
@@ -182,9 +280,9 @@ export default function Configuracion({ data, setData }) {
               {uploadingLogo ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Subiendo...</> : (empresa.logoId ? 'Cambiar Imagen' : 'Seleccionar Imagen')}
             </button>
             {empresa.logoId && (
-              <button 
-                className="btn-secondary danger" 
-                style={{ width: '100%', justifyContent: 'center', marginTop: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }} 
+              <button
+                className="btn-secondary danger"
+                style={{ width: '100%', justifyContent: 'center', marginTop: '8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}
                 onClick={() => setEmpresa({ ...empresa, logoId: '' })}
               >
                 Eliminar Logo
@@ -194,7 +292,7 @@ export default function Configuracion({ data, setData }) {
 
           <div className="stat-card" style={{ padding: '24px' }}>
             <h3 style={{ fontSize: '16px', marginBottom: '24px' }}>Información Legal y Fiscal</h3>
-            
+
             <div className="form-grid">
               <div className="form-group half-width">
                 <label>Nombre Comercial / Razón Social</label>
@@ -251,24 +349,38 @@ export default function Configuracion({ data, setData }) {
 
       {activeTab === 'usuarios' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ padding: '16px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-            <Info size={20} style={{ color: '#2563eb', flexShrink: 0, marginTop: '2px' }} />
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e3a8a', marginBottom: '4px' }}>Gestión de Privacidad (Cero Costes Servidor)</div>
-              <div style={{ fontSize: '12px', color: '#1e40af', lineHeight: '1.5' }}>
-                Por alta seguridad comercial, el CRM únicamente asigna <strong>Roles Visuales</strong> a correos ya existentes. Tanto la <b>Ceración de la Contraseña (Llave)</b> inicial como el <b>Borrado Destructivo Permanente</b> de la plantilla debe ejecutarse siempre desde la pestaña de <i>Authentication</i> en tu <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" style={{color: '#2563eb', fontWeight: 700, textDecoration: 'underline'}}>Consola Nativa de Google Firebase</a>.
+
+          {/* Banner condicional según modo */}
+          {blazeMode ? (
+            <div style={{ padding: '16px', background: '#f0fdf4', borderRadius: '12px', border: '1px solid #bbf7d0', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+              <Zap size={20} style={{ color: '#16a34a', flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#14532d', marginBottom: '4px' }}>Gestión Completa de Usuarios Activada (Modo Blaze)</div>
+                <div style={{ fontSize: '12px', color: '#166534', lineHeight: '1.5' }}>
+                  Puedes <strong>crear, eliminar, suspender y resetear contraseñas</strong> de usuarios directamente desde el CRM, sin necesidad de acceder a Firebase Console. Las cuentas se crean en Firebase Authentication de forma automática.
+                </div>
               </div>
             </div>
-          </div>
-          
+          ) : (
+            <div style={{ padding: '16px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+              <Info size={20} style={{ color: '#2563eb', flexShrink: 0, marginTop: '2px' }} />
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e3a8a', marginBottom: '4px' }}>Gestión de Privacidad (Cero Costes Servidor)</div>
+                <div style={{ fontSize: '12px', color: '#1e40af', lineHeight: '1.5' }}>
+                  Por alta seguridad comercial, el CRM únicamente asigna <strong>Roles Visuales</strong> a correos ya existentes. Tanto la <b>Creación de la Contraseña (Llave)</b> inicial como el <b>Borrado Destructivo Permanente</b> de la plantilla debe ejecutarse siempre desde la pestaña de <i>Authentication</i> en tu <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" style={{color: '#2563eb', fontWeight: 700, textDecoration: 'underline'}}>Consola Nativa de Google Firebase</a>.
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="stat-card" style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fafafa' }}>
             <h3 style={{ fontSize: '14px', margin: 0 }}>Cuentas de Acceso al CRM</h3>
-            <button className="btn-primary" onClick={() => { setUserForm({id:'', nombre:'', email:'', password:'', rol:'trabajador', activo:true}); setIsUserModalOpen(true); }}>
+            <button className="btn-primary" onClick={() => { setUserForm({id:'', uid:'', nombre:'', email:'', password:'', rol:'trabajador', activo:true}); setIsUserModalOpen(true); }}>
               <Plus size={14} /> Nuevo Usuario
             </button>
           </div>
-          
+
           <table className="data-table">
             <thead>
               <tr>
@@ -300,7 +412,12 @@ export default function Configuracion({ data, setData }) {
                     </td>
                     <td style={{ textAlign: 'right', display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
                       <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '11px' }} onClick={() => { setUserForm(u); setIsUserModalOpen(true); }}>Administrar</button>
-                      <button className="icon-btn danger" title="Eliminar usuario" onClick={() => handleUserDelete(u.id)}><Trash2 size={14} /></button>
+                      {blazeMode && (
+                        <button className="icon-btn" title="Resetear contraseña" onClick={() => handleResetPassword(u)} disabled={userSaving}>
+                          <KeyRound size={14} />
+                        </button>
+                      )}
+                      <button className="icon-btn danger" title="Eliminar usuario" onClick={() => handleUserDelete(u.id)} disabled={userSaving}><Trash2 size={14} /></button>
                     </td>
                   </tr>
                 )
@@ -323,9 +440,29 @@ export default function Configuracion({ data, setData }) {
                 <input type="text" value={userForm.nombre} onChange={e => setUserForm({...userForm, nombre: e.target.value})} />
               </div>
               <div className="form-group full-width">
-                <label>Email Idéntico de Acceso (Usuario Login)</label>
-                <input type="email" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} placeholder="El email donde le generaste la cuenta real..." />
+                <label>Email {blazeMode ? 'de Acceso' : 'Idéntico de Acceso (Usuario Login)'}</label>
+                <input
+                  type="email"
+                  value={userForm.email}
+                  onChange={e => setUserForm({...userForm, email: e.target.value})}
+                  placeholder={blazeMode ? 'correo@empresa.com' : 'El email donde le generaste la cuenta real...'}
+                  disabled={!!userForm.id}
+                />
+                {userForm.id && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>El email no se puede modificar una vez creado.</div>}
               </div>
+              {blazeMode && !userForm.id && (
+                <div className="form-group full-width">
+                  <label>Contraseña inicial</label>
+                  <input
+                    type="password"
+                    value={userForm.password}
+                    onChange={e => setUserForm({...userForm, password: e.target.value})}
+                    placeholder="Mínimo 6 caracteres"
+                    autoComplete="new-password"
+                  />
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>El usuario podrá cambiarla desde el enlace de reset. Mínimo 6 caracteres.</div>
+                </div>
+              )}
               <div className="form-group full-width">
                 <label>Rol de Usuario</label>
                 <select value={userForm.rol} onChange={e => setUserForm({...userForm, rol: e.target.value})}>
@@ -339,17 +476,20 @@ export default function Configuracion({ data, setData }) {
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}>
                   <input type="checkbox" checked={userForm.activo} onChange={e => setUserForm({...userForm, activo: e.target.checked})} style={{ width: '16px', height: '16px' }} />
                   Usuario con permiso de acceso activo
+                  {blazeMode && <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '4px' }}>(sincroniza con Firebase Auth)</span>}
                 </label>
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn-secondary" onClick={() => setIsUserModalOpen(false)}>Cancelar</button>
+              <button className="btn-secondary" onClick={() => setIsUserModalOpen(false)} disabled={userSaving}>Cancelar</button>
               {userForm.id && (
-                <button className="btn-secondary" style={{ color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }} onClick={() => handleUserDelete(userForm.id)}>
+                <button className="btn-secondary" style={{ color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }} onClick={() => handleUserDelete(userForm.id)} disabled={userSaving}>
                   <Trash2 size={14} /> Eliminar
                 </button>
               )}
-              <button className="btn-primary" onClick={handleUserSave}>{userForm.id ? 'Guardar Cambios' : 'Crear Acceso'}</button>
+              <button className="btn-primary" onClick={handleUserSave} disabled={userSaving}>
+                {userSaving ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Guardando...</> : (userForm.id ? 'Guardar Cambios' : 'Crear Acceso')}
+              </button>
             </div>
           </div>
         </div>

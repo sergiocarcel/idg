@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, X, Clock, MapPin, Plus, UserPlus, Eye, Copy, Trash2, Info } from 'lucide-react';
 import { saveDoc, deleteDoc } from '../../services/db';
+import ExportButton from '../../components/shared/ExportButton.jsx';
 
 const HOURS_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -229,6 +230,17 @@ export default function Planificacion({ data, setData }) {
           <p className="page-subtitle">Arrastra trabajadores a las celdas para asignarlos a obras por día.</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
+          <ExportButton
+            data={planificacion.filter(p => weekDays.some(d => dayKey(d) === p.fecha))}
+            filename="planificacion_semana"
+            columns={[
+              { key: 'fecha', label: 'Fecha' },
+              { key: 'trabajadorNombre', label: 'Trabajador' },
+              { key: (p) => obras.find(o => o.id === p.obraId)?.nombre || p.obraId, label: 'Obra' },
+              { key: 'horas', label: 'Horas' },
+              { key: 'notas', label: 'Notas' },
+            ]}
+          />
           <button className="btn-secondary" onClick={() => setShowAddTrab(true)} style={{ fontSize: '12px' }}>
             <UserPlus size={14} /> Añadir Trabajador
           </button>

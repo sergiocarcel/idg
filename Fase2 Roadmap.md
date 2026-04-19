@@ -91,7 +91,7 @@
 
 ### 1.5 📝 Historial de Actividad (Logs)
 
-* Registro automático de cambios: quién, qué, cuándo
+* etRegistro automático de cambios: quién, qué, cuándo
 * Timeline visible en cada entidad
 * **Impacto:** 🟢 Bajo-medio
 * **Esfuerzo:** 2 días
@@ -254,4 +254,3 @@
 | **Setup**        | 299-499 € (único) | —              | —                | Configuración, logo, formación 1h         |
 
 > En la práctica, el plan Blaze de Firebase sale a 0€ para casi todos los usos (el tier gratuito incluye 50K lecturas/día, 2M invocaciones Cloud Functions/mes). Solo requiere tener una tarjeta asociada.
->

@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Edit2, Trash2, Mail, Phone, Package, ExternalLink, X } from 'lucide-react';
 import { saveDoc, deleteDoc } from '../../services/db';
+import ExportButton from '../../components/shared/ExportButton.jsx';
 
 export default function Proveedores({ data, setData }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProvId, setSelectedProvId] = useState(null);
   const [selectedDetail, setSelectedDetail] = useState(null); // Para ver detalle del proveedor
@@ -13,7 +17,15 @@ export default function Proveedores({ data, setData }) {
   const [formData, setFormData] = useState(formDataInitial);
 
   const proveedores = data?.proveedores || [];
-  const materiales = data?.materiales || []; // Para ver cuántos materiales nos sirve
+  const materiales = data?.materiales || [];
+
+  useEffect(() => {
+    const openId = location.state?.openId;
+    if (!openId || !proveedores.length) return;
+    const entity = proveedores.find(p => p.id === openId);
+    if (entity) setSelectedDetail(entity);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state?.openId, proveedores]);
 
   const handleInputChange = (field) => (e) => setFormData({ ...formData, [field]: e.target.value });
 
@@ -48,9 +60,26 @@ export default function Proveedores({ data, setData }) {
           <h1 className="page-title">Directorio de Proveedores</h1>
           <p className="page-subtitle">Agenda de suministros, marcas y contactos de almacén.</p>
         </div>
-        <button className="btn-primary" onClick={() => { setFormData(formDataInitial); setSelectedProvId(null); setIsModalOpen(true); }}>
-          <Plus size={16} /> Nuevo Proveedor
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <ExportButton
+            data={proveedores}
+            filename="proveedores"
+            columns={[
+              { key: 'empresa', label: 'Empresa' },
+              { key: 'especialidad', label: 'Especialidad' },
+              { key: 'contacto', label: 'Contacto' },
+              { key: 'telefono', label: 'Teléfono' },
+              { key: 'email', label: 'Email' },
+              { key: 'plazo', label: 'Plazo' },
+              { key: 'pago', label: 'Pago' },
+              { key: (p) => getMaterialsCount(p.id), label: 'Materiales' },
+              { key: 'notas', label: 'Notas' },
+            ]}
+          />
+          <button className="btn-primary" onClick={() => { setFormData(formDataInitial); setSelectedProvId(null); setIsModalOpen(true); }}>
+            <Plus size={16} /> Nuevo Proveedor
+          </button>
+        </div>
       </header>
 
       <div style={{ display: 'grid', gridTemplateColumns: selectedDetail ? '1fr 360px' : 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>

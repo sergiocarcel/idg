@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Plus, Trash2, ArrowUp, ArrowDown, Save, FileText, LayoutTemplate, Trash } from 'lucide-react';
+import ActivityTimeline from '../../components/shared/ActivityTimeline.jsx';
 import { deleteDoc } from '../../services/db';
 
 function ContentEditableCell({ initialValue, onChange, onFocus, onBlur, placeholder }) {
@@ -49,6 +50,7 @@ function ContentEditableCell({ initialValue, onChange, onFocus, onBlur, placehol
 export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave, onClose }) {
   const [activeSearch, setActiveSearch] = useState({ capIdx: null, partIdx: null });
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [editorTab, setEditorTab] = useState('datos');
   const condicionesRef = useRef(null);
   const isNew = !ppto;
 
@@ -189,7 +191,31 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
           </div>
         </div>
 
+        {/* Tabs (only when editing existing) */}
+        {!isNew && (
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 24px', background: '#f8fafc' }}>
+            {['datos', 'historial'].map(tab => (
+              <button key={tab} onClick={() => setEditorTab(tab)} style={{
+                padding: '10px 14px 10px 0', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px',
+                borderBottom: editorTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
+                color: editorTab === tab ? 'var(--text-main)' : 'var(--text-muted)',
+                fontWeight: editorTab === tab ? 600 : 500, marginRight: '12px',
+              }}>
+                {tab === 'datos' ? 'Editar' : 'Historial'}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Historial Tab */}
+        {!isNew && editorTab === 'historial' && (
+          <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
+            <ActivityTimeline entidad="presupuestos" entidadId={ppto?.id} logs={data?.logs || []} usuarios={data?.config?.usuarios || []} />
+          </div>
+        )}
+
         {/* Form Body */}
+        {(isNew || editorTab === 'datos') && (
         <div className="modal-body" style={{ flex: 1, overflowY: 'auto', background: '#fafafa', padding: '24px' }}>
           
           <div className="stat-card" style={{ padding: '20px', marginBottom: '24px' }}>
@@ -463,6 +489,7 @@ export default function PresupuestoEditor({ ppto, data, plantillas = [], onSave,
           </div>
 
         </div>
+        )}
 
         {/* Footer */}
         <div className="modal-footer" style={{ background: '#fff' }}>

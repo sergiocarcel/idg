@@ -1,19 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Clock, User, Search, UserPlus, Edit2, Trash2, X } from 'lucide-react';
 import { saveDoc, deleteDoc } from '../../services/db';
+import ExportButton from '../../components/shared/ExportButton.jsx';
+import ActivityTimeline from '../../components/shared/ActivityTimeline.jsx';
+import { fmtDate, fmtCurrency } from '../../utils/csvExport';
 
 export default function Trabajadores({ data, setData }) {
-  const [activeTab, setActiveTab] = useState('directorio'); // 'directorio' | 'horas'
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState('directorio');
   const [filterText, setFilterText] = useState('');
   const [horasForm, setHorasForm] = useState({ trabajador: '', fecha: new Date().toISOString().split('T')[0], horas: '', concepto: '', obraId: '' });
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [trabajadorModalTab, setTrabajadorModalTab] = useState('datos');
   const [formData, setFormData] = useState({ nombre: '', apellidos: '', rol: '', email: '', telefono: '', dni: '', comentarios: '', costeBase: '', iva: 0 });
   const [editingId, setEditingId] = useState(null);
 
   const trabajadores = data?.trabajadores || [];
   const registroHoras = data?.registroHoras || [];
   const obras = data?.obras || [];
+
+  const openTrabajador = (t) => {
+    setFormData(t);
+    setEditingId(t.id);
+    setTrabajadorModalTab('datos');
+    setIsModalOpen(true);
+  };
+
+  useEffect(() => {
+    const openId = location.state?.openId;
+    if (!openId || !trabajadores.length) return;
+    const entity = trabajadores.find(t => t.id === openId);
+    if (entity) { setActiveTab('directorio'); openTrabajador(entity); }
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state?.openId, trabajadores]);
 
   const getObraName = (id) => obras.find(o => o.id === id)?.nombre || 'Varios / Taller';
 
@@ -51,9 +73,25 @@ export default function Trabajadores({ data, setData }) {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ fontSize: '16px', margin: 0 }}>Plantilla ({trabajadores.length})</h3>
-            <button className="btn-primary" onClick={() => { setFormData({ nombre: '', apellidos: '', rol: '', email: '', telefono: '', dni: '', comentarios: '', costeBase: '', iva: 0 }); setEditingId(null); setIsModalOpen(true); }}>
-              <UserPlus size={16} /> Añadir Trabajador
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <ExportButton
+                data={trabajadores}
+                filename="trabajadores"
+                columns={[
+                  { key: 'nombre', label: 'Nombre' },
+                  { key: 'apellidos', label: 'Apellidos' },
+                  { key: 'rol', label: 'Rol' },
+                  { key: 'email', label: 'Email' },
+                  { key: 'telefono', label: 'Teléfono' },
+                  { key: 'dni', label: 'DNI' },
+                  { key: (t) => fmtCurrency(t.costeBase), label: 'Coste Base' },
+                  { key: 'comentarios', label: 'Comentarios' },
+                ]}
+              />
+              <button className="btn-primary" onClick={() => { setFormData({ nombre: '', apellidos: '', rol: '', email: '', telefono: '', dni: '', comentarios: '', costeBase: '', iva: 0 }); setEditingId(null); setIsModalOpen(true); }}>
+                <UserPlus size={16} /> Añadir Trabajador
+              </button>
+            </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
             {trabajadores.map(t => (
@@ -101,14 +139,26 @@ export default function Trabajadores({ data, setData }) {
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '12px', alignItems: 'center', background: '#fafafa' }}>
               <div style={{ flex: 1, position: 'relative' }}>
                 <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                <input 
-                  type="text" 
-                  placeholder="Buscar por nombre o concepto..." 
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre o concepto..."
                   value={filterText}
                   onChange={e => setFilterText(e.target.value)}
                   style={{ width: '100%', padding: '8px 12px 8px 34px', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '13px' }}
                 />
               </div>
+              <ExportButton
+                data={horasFiltradas}
+                filename="registro_horas"
+                columns={[
+                  { key: 'trabajador', label: 'Trabajador' },
+                  { key: (h) => fmtDate(h.fecha), label: 'Fecha' },
+                  { key: 'horas', label: 'Horas' },
+                  { key: 'concepto', label: 'Concepto' },
+                  { key: (h) => getObraName(h.obraId), label: 'Obra' },
+                  { key: (h) => h.aprobado ? 'Aprobado' : 'Pendiente', label: 'Estado' },
+                ]}
+              />
             </div>
             
             <table className="data-table">
@@ -224,6 +274,25 @@ export default function Trabajadores({ data, setData }) {
               <h2>{editingId ? 'Editar Trabajador' : 'Añadir Trabajador'}</h2>
               <button className="icon-btn" onClick={() => setIsModalOpen(false)} style={{background: 'none'}}><X size={18} /></button>
             </div>
+            {editingId && (
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 24px' }}>
+                {['datos', 'historial'].map(tab => (
+                  <button key={tab} onClick={() => setTrabajadorModalTab(tab)} style={{
+                    padding: '10px 14px 10px 0', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px',
+                    borderBottom: trabajadorModalTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
+                    color: trabajadorModalTab === tab ? 'var(--text-main)' : 'var(--text-muted)',
+                    fontWeight: trabajadorModalTab === tab ? 600 : 500, marginRight: '12px',
+                  }}>
+                    {tab === 'datos' ? 'Datos' : 'Historial'}
+                  </button>
+                ))}
+              </div>
+            )}
+            {editingId && trabajadorModalTab === 'historial' ? (
+              <div className="modal-body">
+                <ActivityTimeline entidad="trabajadores" entidadId={editingId} logs={data?.logs || []} usuarios={data?.config?.usuarios || []} />
+              </div>
+            ) : (<>
             <div className="modal-body form-grid">
               <div className="form-group half-width">
                 <label>Nombre</label>
@@ -280,6 +349,7 @@ export default function Trabajadores({ data, setData }) {
                 setIsModalOpen(false);
               }}>Guardar Trabajador</button>
             </div>
+            </>)}
           </div>
         </div>
       )}

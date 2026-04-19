@@ -15,6 +15,13 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
     
+    // Historial de actividad: append-only (no se puede editar ni borrar un log)
+    match /logs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
     // Regla base para TODAS LAS COLECCIONES del CRM:
     match /{document=**} {
       allow read: if isAuthenticated();

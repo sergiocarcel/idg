@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Home, Users, Briefcase, FileText, FileBarChart, Package,
-  Truck, ClipboardList, Calendar, User, Settings, FolderKanban, LogOut, ShoppingCart, X, LayoutGrid
+  Truck, ClipboardList, Calendar, User, Settings, FolderKanban, LogOut, ShoppingCart, X, LayoutGrid, BarChart3
 } from 'lucide-react';
 import { auth } from '../../config/firebase';
 
@@ -12,6 +12,7 @@ const menuItems = [
   { k: "obras", l: "Obras", i: Briefcase },
   { k: "presupuestos", l: "Presupuestos", i: FileText },
   { k: "facturas", l: "Facturación", i: FileBarChart },
+  { k: "informes", l: "Informes", i: BarChart3 },
   { k: "planificacion", l: "Planificación", i: LayoutGrid },
   { k: "pedidos", l: "Pedidos", i: ShoppingCart },
   { k: "materiales", l: "Almacén", i: Package },
@@ -24,8 +25,8 @@ const menuItems = [
 
 export default function Sidebar({ userRole = 'trabajador', userName = 'Usuario', onClose }) {
   const roleAccess = {
-    admin: ['dashboard', 'clientes', 'obras', 'presupuestos', 'facturas', 'planificacion', 'pedidos', 'materiales', 'proveedores', 'calendario', 'trabajadores', 'gestion', 'config'],
-    jefe: ['dashboard', 'clientes', 'obras', 'presupuestos', 'planificacion', 'pedidos', 'materiales', 'calendario', 'trabajadores'],
+    admin: ['dashboard', 'clientes', 'obras', 'presupuestos', 'facturas', 'informes', 'planificacion', 'pedidos', 'materiales', 'proveedores', 'calendario', 'trabajadores', 'gestion', 'config'],
+    jefe: ['dashboard', 'clientes', 'obras', 'presupuestos', 'informes', 'planificacion', 'pedidos', 'materiales', 'calendario', 'trabajadores'],
     logistica: ['dashboard', 'pedidos', 'materiales', 'proveedores'],
     trabajador: ['dashboard', 'pedidos', 'trabajadores']
   };
@@ -33,7 +34,7 @@ export default function Sidebar({ userRole = 'trabajador', userName = 'Usuario',
   const allowed = roleAccess[userRole] || roleAccess['trabajador'];
 
   const groups = [
-    { title: 'GESTIÓN', keys: ['dashboard', 'clientes', 'obras', 'presupuestos', 'facturas'] },
+    { title: 'GESTIÓN', keys: ['dashboard', 'clientes', 'obras', 'presupuestos', 'facturas', 'informes'] },
     { title: 'OPERACIONES', keys: ['planificacion', 'pedidos', 'materiales', 'proveedores', 'calendario'] },
     { title: 'SISTEMA', keys: ['trabajadores', 'gestion', 'config'] }
   ];

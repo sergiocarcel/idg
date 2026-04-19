@@ -1,11 +1,15 @@
-/**
- * Exportar datos a CSV con descarga automática.
- * Compatible con Excel (BOM UTF-8 para acentos).
- *
- * @param {Array<Object>} data - Array de objetos a exportar
- * @param {Array<{key: string, label: string}>} columns - Definición de columnas
- * @param {string} filename - Nombre del archivo (sin extensión)
- */
+export const fmtDate = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+export const fmtCurrency = (n) =>
+  new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n || 0);
+
+export const fmtBool = (v) => (v ? 'Sí' : 'No');
+
 export function exportToCSV(data, columns, filename = 'export') {
   if (!data || data.length === 0) {
     alert('No hay datos para exportar.');

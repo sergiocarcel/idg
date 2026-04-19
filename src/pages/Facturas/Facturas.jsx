@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { TrendingUp, TrendingDown, DollarSign, FileBarChart, Save, Plus, Trash2, X } from 'lucide-react';
 import { updateDoc } from '../../services/db';
+import ExportButton from '../../components/shared/ExportButton.jsx';
+import { fmtCurrency } from '../../utils/csvExport';
+import { round2, normalizeLine, sumLineas, getPresupuestoAceptado, calculateRentabilidad, getPeriodKey, periodLabel } from '../../utils/rentabilidadUtils';
 
 const PREDEFINED_CATS = [
   { key: 'personal',             label: 'Personal (por trabajador/nómina)',  placeholder: 'Ej: Juan Fontanero', useSuggestions: 'trabajadores' },
@@ -14,21 +17,6 @@ const PREDEFINED_CATS = [
 const IVA_OPTIONS = [21, 10, 4, 0];
 const IS_OPTIONS = [25, 15];
 
-const round2 = (n) => Math.round(n * 100) / 100;
-
-const normalizeLine = (line) => {
-  if ('importe' in line && !('base' in line)) {
-    const base = Number(line.importe) || 0;
-    return { concepto: line.concepto || '', base, iva: 21, total: round2(base * 1.21) };
-  }
-  return {
-    concepto: line.concepto || '',
-    base: Number(line.base) || 0,
-    iva: line.iva !== undefined ? Number(line.iva) : 21,
-    total: Number(line.total) || 0,
-  };
-};
-
 export default function Facturas({ data, setData }) {
   const [selectedObraId, setSelectedObraId] = useState(null);
   const [vistaTemp, setVistaTemp] = useState('obra');
@@ -38,6 +26,7 @@ export default function Facturas({ data, setData }) {
   const obras = data?.obras || [];
   const presupuestos = data?.presupuestos || [];
   const trabajadores = data?.trabajadores || [];
+  const clientes = data?.clientes || [];
   const proveedores = data?.proveedores || [];
 
   const updateGastos = async (obraId, field, value) => {
@@ -47,57 +36,12 @@ export default function Facturas({ data, setData }) {
     await updateDoc('obras', obraId, { gastosReales: { ...actuales, [field]: value } });
   };
 
-  const sumLineas = (lineas) => {
-    const items = (Array.isArray(lineas) ? lineas : []).map(normalizeLine);
-    return {
-      base: round2(items.reduce((s, l) => s + l.base, 0)),
-      ivaTotal: round2(items.reduce((s, l) => s + (l.total - l.base), 0)),
-      total: round2(items.reduce((s, l) => s + l.total, 0)),
-    };
-  };
-
-  const getPresupuestoAceptado = (obraId) => {
-    const ppto = presupuestos.find(p => p.obraId === obraId && p.estado === 'aceptado');
-    if (!ppto) return 0;
-    return ppto.capitulos.reduce((sum, cap) =>
-      sum + cap.partidas.reduce((s, p) => s + (p.cantidad * p.precioVenta), 0), 0);
-  };
-
   const formatCurrency = (val) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(val || 0);
 
-  const calculateRentabilidad = (obra) => {
-    const g = obra.gastosReales || {};
-    const gastosSum = Object.entries(g)
-      .filter(([k, v]) => k !== '_customLabels' && Array.isArray(v))
-      .reduce((acc, [, lineas]) => {
-        const s = sumLineas(lineas);
-        return { base: acc.base + s.base, ivaTotal: acc.ivaTotal + s.ivaTotal, total: acc.total + s.total };
-      }, { base: 0, ivaTotal: 0, total: 0 });
-    gastosSum.base = round2(gastosSum.base);
-    gastosSum.ivaTotal = round2(gastosSum.ivaTotal);
-    gastosSum.total = round2(gastosSum.total);
-
-    const pptoBase = getPresupuestoAceptado(obra.id);
-    let ingresos;
-    if (obra.ingresosAprobados && (obra.ingresosAprobados.base || obra.ingresosAprobados.total)) {
-      ingresos = { base: Number(obra.ingresosAprobados.base) || 0, iva: Number(obra.ingresosAprobados.iva) ?? 21, total: Number(obra.ingresosAprobados.total) || 0 };
-    } else {
-      const base = pptoBase;
-      const iva = 21;
-      ingresos = { base, iva, total: round2(base * 1.21) };
-    }
-
-    const isPercent = Number(obra.impuestoSociedades) || 25;
-    const beneficioNeto = round2(ingresos.base - gastosSum.base);
-    const isAmount = round2(beneficioNeto > 0 ? beneficioNeto * isPercent / 100 : 0);
-    const margen = beneficioNeto;
-    const porcentaje = ingresos.base > 0 ? (margen / ingresos.base) * 100 : 0;
-
-    return { presupuestado: pptoBase, gastos: gastosSum, ingresos, beneficioNeto, isPercent, isAmount, margen, porcentaje, g };
-  };
+  const calcRent = (obra) => calculateRentabilidad(obra, presupuestos);
 
   const totalsGlobales = obras.reduce((acc, o) => {
-    const r = calculateRentabilidad(o);
+    const r = calcRent(o);
     acc.ingresoBase += r.ingresos.base;
     acc.ingresoIva += round2(r.ingresos.total - r.ingresos.base);
     acc.gastoBase += r.gastos.base;
@@ -118,29 +62,11 @@ export default function Facturas({ data, setData }) {
     return '#dc2626';
   };
 
-  const getPeriodKey = (obra) => {
-    if (!obra.inicio) return 'Sin fecha';
-    const d = new Date(obra.inicio);
-    if (vistaTemp === 'mensual') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    if (vistaTemp === 'trimestral') return `${d.getFullYear()}-T${Math.ceil((d.getMonth() + 1) / 3)}`;
-    if (vistaTemp === 'anual') return `${d.getFullYear()}`;
-    return obra.id;
-  };
-
-  const periodLabel = (key) => {
-    if (vistaTemp === 'mensual') {
-      const [y, m] = key.split('-');
-      return new Date(y, m - 1).toLocaleString('es-ES', { month: 'long', year: 'numeric' });
-    }
-    if (vistaTemp === 'trimestral') return key.replace('-', ' ');
-    return key;
-  };
-
   const buildPeriodRows = () => {
     const map = new Map();
     obras.forEach(o => {
-      const k = getPeriodKey(o);
-      const r = calculateRentabilidad(o);
+      const k = getPeriodKey(o, vistaTemp);
+      const r = calcRent(o);
       if (!map.has(k)) map.set(k, { key: k, ingresoBase: 0, gastoBase: 0, margen: 0, count: 0 });
       const row = map.get(k);
       row.ingresoBase += r.ingresos.base;
@@ -295,6 +221,19 @@ export default function Facturas({ data, setData }) {
           <h1 className="page-title">Análisis de Rentabilidad</h1>
           <p className="page-subtitle">Control financiero completo: ingresos, gastos, IVA y beneficio por obra.</p>
         </div>
+        <ExportButton
+          data={obras.map(o => { const r = calcRent(o); return { obra: o.nombre, cliente: clientes.find(c => c.id === o.clienteId)?.nombre || '', presupuestado: r.presupuestado, ingresoBase: r.ingresos.base, gastoBase: r.gastos.base, beneficioNeto: r.beneficioNeto, margen: r.porcentaje }; })}
+          filename="rentabilidad_obras"
+          columns={[
+            { key: 'obra', label: 'Obra' },
+            { key: 'cliente', label: 'Cliente' },
+            { key: (r) => fmtCurrency(r.presupuestado), label: 'Presupuestado' },
+            { key: (r) => fmtCurrency(r.ingresoBase), label: 'Ingresos (base)' },
+            { key: (r) => fmtCurrency(r.gastoBase), label: 'Gastos (base)' },
+            { key: (r) => fmtCurrency(r.beneficioNeto), label: 'Beneficio Neto' },
+            { key: (r) => r.margen.toFixed(2) + '%', label: 'Margen %' },
+          ]}
+        />
       </header>
 
       {/* KPIs Globales */}
@@ -357,7 +296,7 @@ export default function Facturas({ data, setData }) {
                 obras.length === 0
                   ? <tr><td colSpan="5" style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>No hay obras para analizar</td></tr>
                   : obras.map(o => {
-                    const rent = calculateRentabilidad(o);
+                    const rent = calcRent(o);
                     return (
                       <tr key={o.id} onClick={() => setSelectedObraId(o.id)}
                         style={{ cursor: 'pointer', background: selectedObraId === o.id ? '#eff6ff' : 'transparent' }}>
@@ -383,7 +322,7 @@ export default function Facturas({ data, setData }) {
                     const pct = row.ingresoBase > 0 ? (row.margen / row.ingresoBase) * 100 : 0;
                     return (
                       <tr key={row.key}>
-                        <td><div style={{ fontWeight: 600 }}>{periodLabel(row.key)}</div></td>
+                        <td><div style={{ fontWeight: 600 }}>{periodLabel(row.key, vistaTemp)}</div></td>
                         <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>{row.count} obra{row.count !== 1 ? 's' : ''}</td>
                         <td style={{ textAlign: 'right', fontWeight: 500 }}>{formatCurrency(row.ingresoBase)}</td>
                         <td style={{ textAlign: 'right', color: '#dc2626' }}>{formatCurrency(row.gastoBase)}</td>
@@ -411,7 +350,7 @@ export default function Facturas({ data, setData }) {
               </div>
             ) : (() => {
               const obra = obras.find(o => o.id === selectedObraId);
-              const r = calculateRentabilidad(obra);
+              const r = calcRent(obra);
               const customCats = getCustomCats(r.g);
               const allCats = [
                 ...PREDEFINED_CATS.map(cat => ({

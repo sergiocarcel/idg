@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 IDG CRM — a construction/project management CRM for managing clients, projects (obras), budgets, invoices, purchases, materials, workers, HR, and scheduling. Built for Spanish-speaking construction companies.
 
-**Stack:** React 19 + Vite 8 + Firebase (Firestore, Auth, Hosting) + Cloudinary (file uploads) + EmailJS (email sending) + html2pdf.js (PDF generation) + firma.dev (electronic signatures)
+**Stack:** React 19 + Vite 8 + Firebase (Firestore, Auth, Hosting, Cloud Functions v2) + Cloudinary (file uploads) + EmailJS (email sending) + html2pdf.js (PDF generation) + firma.dev (electronic signatures)
 
 ## Commands
 
@@ -14,8 +14,11 @@ IDG CRM — a construction/project management CRM for managing clients, projects
 npm run dev          # Vite dev server at http://localhost:5173
 npm run build        # Production build to dist/
 npm run preview      # Preview production build locally
-npm run emulators    # Firebase emulators (Firestore :8080, Auth :9099, Storage :9199, UI :4000)
+npm run emulators    # Firebase emulators (Firestore :8080, Auth :9099, Storage :9199, Functions :5001, UI :4000)
 firebase deploy --only firestore,hosting   # Deploy (Storage not enabled on this project)
+# Blaze mode only:
+cd functions && npm install   # First-time setup of Cloud Functions dependencies
+firebase deploy --only functions   # Deploy user management Cloud Functions (requires Blaze plan)
 ```
 
 No test framework is currently configured.
@@ -26,8 +29,12 @@ No test framework is currently configured.
 
 - `App.jsx` — Central routing hub and state owner. Holds `appData` object with all Firestore collections. Sets up real-time `onSnapshot` listeners and passes data + setters as props to pages.
 - `src/services/db.js` — Firestore CRUD layer (`listenToCollection`, `saveDoc`, `deleteDoc`, `updateDoc`). All data operations go through here.
+- `src/services/userAdmin.js` — User management wrapper. `isBlaze()` checks `VITE_FIREBASE_MODE === 'blaze'`. Exports `createUserRemote`, `deleteUserRemote`, `resetUserPasswordRemote`, `toggleUserActiveRemote` — each calls the corresponding Cloud Function via `httpsCallable`. Used exclusively by `Configuracion.jsx` for the Blaze user management flow.
+- `src/services/notifications.js` — Centralised notification factory. `createNotification({tipo, mensaje, link, destinatarios})` writes to the `notificaciones` collection with a `NOTIF-` prefixed id. Shortcut helpers: `notifyPedidoNuevo`, `notifyPresupuestoFirmado`, `notifyRRHHVencimiento`, `notifyTareaAsignada`, `notifyEvento`. Callers pass `data.config.usuarios` for role → email resolution.
+- `src/services/fcmClient.js` — FCM push wrapper (Blaze only). `isFcmSupported()` gates all calls. `requestPermissionAndToken()` registers the SW and fetches the FCM token; `registerCurrentUserToken(email, token)` upserts it to `fcmTokens/{email}`. Called from `App.jsx` post-login.
+- `functions/index.js` — Cloud Functions v2 (Node 20): `createUser`, `deleteUser`, `resetUserPassword`, `toggleUserActive` (user management) + `onNotificacionCreated` (Firestore trigger that sends FCM push to destinatarios). Only deployed when `VITE_FIREBASE_MODE=blaze`. The `createUser` function handles both Auth creation and Firestore `config/usuarios` list update.
 - `src/services/firmadev.js` — firma.dev API client. Exports `blobToBase64`, `createAndSendSigningRequest`, `checkSigningStatus`. Calls `https://api.firma.dev/functions/v1/signing-request-api` directly from the frontend using `VITE_FIRMADEV_API_KEY`. No backend/Cloud Functions required — polling-based approach instead of webhooks.
-- `src/config/firebase.js` — Firebase initialization using compat SDK. Auto-connects to emulators when `import.meta.env.DEV` is true.
+- `src/config/firebase.js` — Firebase initialization using compat SDK. Exports `firebase, app, db, auth, storage, functions`. Auto-connects all services to emulators when `import.meta.env.DEV` is true (Functions emulator on port 5001).
 - `src/pages/` — 16 page modules, each a self-contained CRUD view (Clientes, Obras, Presupuestos, Facturas, Pedidos, Almacen, Proveedores, Trabajadores, RRHH, Calendario, Planificacion, Configuracion, Dashboard, Auth, Portal). `Portal/PortalColaborador.jsx` is the public collaborator portal at `/portal` — no Firebase Auth required, login via email + 6-digit PIN stored in `colaboradores` collection.
 - `src/components/Layout/` — Layout wrapper + Sidebar with role-based menu filtering + NotificationBell (in-app notifications).
 - `src/components/shared/` — Reusable cross-module components:
@@ -89,6 +96,7 @@ No test framework is currently configured.
 - **Styling:** CSS variables in `index.css` `:root` + mix of CSS classes and inline styles. Lucide React for icons.
 - **Firebase compat SDK** (`firebase/compat/*`) is used throughout — not the modular SDK.
 - **Environment variables** prefixed with `VITE_` (Vite requirement): Firebase credentials + Cloudinary config + EmailJS config + firma.dev API key in `.env`.
+- **CSV Export:** `src/utils/csvExport.js` — `exportToCSV(data, columns, filename)` generates a BOM UTF-8 CSV with `;` separator (Excel ES compatible). Helpers: `fmtDate(iso)`, `fmtCurrency(n)`, `fmtBool(v)`. Shared button: `src/components/shared/ExportButton.jsx` — drop it next to "Nuevo" buttons passing `data`, `columns`, `filename`. Integrated in all 11 main pages; each page exports the currently filtered view.
 
 ## Environment Variables
 
@@ -106,11 +114,19 @@ VITE_EMAILJS_PUBLIC_KEY
 VITE_EMAILJS_TEMPLATE_PORTAL        # template_vecke19 — used for all emails (portal access + presupuestos)
 VITE_FIRMADEV_API_KEY               # firma.dev workspace API key (~0.029€/envelope)
 VITE_GOOGLE_OAUTH_CLIENT_ID         # OAuth 2.0 Client ID (tipo Web) de Google Cloud Console — usado por Calendario.jsx para Google Calendar via GIS (NO usa Firebase Auth signInWithPopup)
+VITE_FIREBASE_MODE                  # 'spark' (default) | 'blaze' — controls user management mode. spark = manual via Firebase Console; blaze = full CRUD via Cloud Functions
+VITE_FIREBASE_VAPID_KEY             # FCM Web Push VAPID key (Blaze only). Firebase Console → Project Settings → Cloud Messaging → Web Push Certificates → "Key pair"
 ```
 
 ## Firestore Collections
 
 `clientes`, `obras`, `presupuestos`, `facturas` (unused), `pedidos`, `materiales`, `proveedores`, `trabajadores`, `registroHoras`, `documentosRRHH`, `catalogoPartidas`, `tareasDashboard`, `notificaciones`, `eventos`, `planificacion`, `colaboradores`, `plantillasPresupuesto`, `config` (empresa data + usuarios with roles).
+
+**`config/usuarios`** shape: `{ list: [{ id, nombre, email, rol, activo, uid? }] }`. The `uid` field is optional — present only for users created via Blaze mode (Cloud Functions). Users created manually in Spark mode won't have `uid`; functions that need it will resolve it via `auth.getUserByEmail(email)` as a fallback.
+
+**`fcmTokens`** — new collection (Blaze only). One doc per user email: `{ tokens: string[], updatedAt: ISO }`. Tokens are added via `arrayUnion` on login (via `fcmClient.js`). The `onNotificacionCreated` Cloud Function reads this to fan out FCM pushes and removes stale tokens automatically.
+
+**`documentosRRHH`** — extended with optional `notificadoBucket: '30d' | '7d' | 'expirado'` field. Set by the expiration-check `useEffect` in `RRHH.jsx` to prevent duplicate notifications per threshold bucket.
 
 ## Cloudinary Upload Pattern
 

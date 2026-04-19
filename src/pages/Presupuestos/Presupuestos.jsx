@@ -1,15 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Edit2, Trash2, FileText, Download, Copy, Eye, Send, Lock, BookOpen, RotateCcw, Mail, Link2, X, MoreHorizontal, CheckCircle, Printer, MessageCircle, LayoutTemplate, FileSignature, RefreshCw, Paperclip } from 'lucide-react';
 import { openWhatsApp, sendEmail } from '../../utils/sendUtils';
 import { generatePdfFromElement, generatePresupuestoPdf } from '../../utils/pdfUtils';
 import { saveDoc, deleteDoc, updateDoc } from '../../services/db';
 import { createAndSendSigningRequest, checkSigningStatus, blobToBase64 } from '../../services/firmadev';
+import { notifyPresupuestoFirmado } from '../../services/notifications';
 import PresupuestoEditor from './PresupuestoEditor.jsx';
 import PresupuestoPrint from './PresupuestoPrint.jsx';
 import SignatureCanvas from '../../components/shared/SignatureCanvas.jsx';
 import CatalogoPartidas from './CatalogoPartidas.jsx';
+import ExportButton from '../../components/shared/ExportButton.jsx';
+import { fmtDate, fmtCurrency } from '../../utils/csvExport';
 
 export default function Presupuestos({ data, setData, forceMode }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [filter, setFilter] = useState('todos');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isCatalogoOpen, setIsCatalogoOpen] = useState(false);
@@ -46,6 +52,14 @@ export default function Presupuestos({ data, setData, forceMode }) {
 
   const presupuestos = data?.presupuestos || [];
   const clientes = data?.clientes || [];
+
+  useEffect(() => {
+    const openId = location.state?.openId;
+    if (!openId || !presupuestos.length) return;
+    const entity = presupuestos.find(p => p.id === openId);
+    if (entity) handleEdit(entity);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state?.openId, presupuestos]);
 
   const getClientName = (id) => clientes.find(c => c.id === id)?.nombre || 'Cliente desconocido';
 
@@ -279,6 +293,7 @@ export default function Presupuestos({ data, setData, forceMode }) {
           }
         }
 
+        await notifyPresupuestoFirmado({ ppto, usuarios: data?.config?.usuarios || [] });
         if (!ppto.obraId) setLinkObraModal({ ...ppto, estado: 'aceptado' });
         alert('✅ El presupuesto ha sido firmado y marcado como Aceptado.');
       } else if (finished && !signedDocUrl) {
@@ -320,6 +335,18 @@ export default function Presupuestos({ data, setData, forceMode }) {
           <p className="page-subtitle">Gestiona las valoraciones económicas de tus obras.</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
+          <ExportButton
+            data={filter === 'plantillas' ? [] : filteredPptos}
+            filename="presupuestos"
+            columns={[
+              { key: 'id', label: 'ID' },
+              { key: (p) => getClientName(p.clienteId), label: 'Cliente' },
+              { key: (p) => fmtDate(p.fecha), label: 'Fecha' },
+              { key: (p) => getStatusStyle(p.estado).label, label: 'Estado' },
+              { key: (p) => fmtCurrency(calculateTotal(p)), label: 'Importe' },
+              { key: 'obraId', label: 'Obra' },
+            ]}
+          />
           <button className="btn-secondary" onClick={() => setIsCatalogoOpen(true)}>
             <BookOpen size={16} /> Catálogo Maestro
           </button>

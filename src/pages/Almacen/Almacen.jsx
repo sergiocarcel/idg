@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, X, Package, MoveRight } from 'lucide-react';
 import { saveDoc, deleteDoc } from '../../services/db';
+import ExportButton from '../../components/shared/ExportButton.jsx';
+import { fmtDate } from '../../utils/csvExport';
 
 export default function Almacen({ data, setData }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -68,9 +70,22 @@ export default function Almacen({ data, setData }) {
           <h1 className="page-title">Almacén de Herramientas y Material</h1>
           <p className="page-subtitle">Control simple de material asignado a cada obra.</p>
         </div>
-        <button className="btn-primary" onClick={() => openForm()}>
-          <Plus size={16} /> Añadir Material
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <ExportButton
+            data={filteredMateriales}
+            filename="materiales"
+            columns={[
+              { key: 'nombre', label: 'Nombre' },
+              { key: 'cantidad', label: 'Cantidad' },
+              { key: (m) => getObraName(m.obraId), label: 'Obra' },
+              { key: 'responsable', label: 'Responsable' },
+              { key: (m) => fmtDate(m.createdAt), label: 'Fecha alta' },
+            ]}
+          />
+          <button className="btn-primary" onClick={() => openForm()}>
+            <Plus size={16} /> Añadir Material
+          </button>
+        </div>
       </header>
 
       <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '24px' }}>
