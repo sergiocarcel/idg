@@ -121,7 +121,7 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
 
                     return (
                       <tr key={partIdx}>
-                        <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', fontSize: '11px' }}>{partida.descripcion}</td>
+                        <td style={{ padding: '6px 8px', borderBottom: '1px solid #eee', fontSize: '11px' }} dangerouslySetInnerHTML={{ __html: partida.descripcion || '' }} />
                         <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #eee', fontSize: '11px', color: '#666' }}>{partida.unidad || 'ud'}</td>
                         <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #eee', fontSize: '11px' }}>{partida.cantidad}</td>
                         {showPrice && <td style={{ padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #eee', fontSize: '11px' }}>{formatCurrency(precio)}</td>}
@@ -192,7 +192,7 @@ export default function PresupuestoPrint({ ppto, data, onClose, mode = 'cliente'
                         const importe = partida.cantidad * precio;
                         return (
                           <tr key={partIdx}>
-                            <td style={{ padding: '6px 8px', borderBottom: '1px solid #fef3c7', fontSize: '11px' }}>{partida.descripcion}</td>
+                            <td style={{ padding: '6px 8px', borderBottom: '1px solid #fef3c7', fontSize: '11px' }} dangerouslySetInnerHTML={{ __html: partida.descripcion || '' }} />
                             <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #fef3c7', fontSize: '11px', color: '#666' }}>{partida.unidad || 'ud'}</td>
                             <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #fef3c7', fontSize: '11px' }}>{partida.cantidad}</td>
                             {showPrice && <td style={{ padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #fef3c7', fontSize: '11px' }}>{formatCurrency(precio)}</td>}
